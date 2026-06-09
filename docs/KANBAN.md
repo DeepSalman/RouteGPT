@@ -90,6 +90,7 @@ No cards yet.
 - `Report wrong info` button added with a lightweight confirmation state.
 - Step 12 QA matrix documented in `docs/MANUAL_QA.md` with 12/12 mocked workflow cases passing.
 - Step 13 polish pass improved loading states, frontend error copy, responsive layout rules, and README run instructions.
+- GitHub Pages deployment workflow added for the static frontend demo.
 
 ## MVP Milestone Checklist
 

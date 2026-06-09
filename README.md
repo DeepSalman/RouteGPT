@@ -92,6 +92,30 @@ If `vite` is not recognized, dependencies are not installed yet. Run `npm instal
 - Backend health check: `http://localhost:4000/health`
 - Frontend: `http://localhost:5173`
 
+## GitHub Pages
+
+The frontend is deployed by GitHub Actions from `.github/workflows/pages.yml`.
+
+Live URL:
+
+```text
+https://deepsalman.github.io/RouteGPT/
+```
+
+The Pages build uses static demo mode:
+
+```env
+VITE_DEMO_MODE=true
+VITE_BASE_PATH=/RouteGPT/
+```
+
+This makes the UI, chat flow, result cards, loading states, and report action visible on GitHub Pages. GitHub Pages does not run the Express backend, PostgreSQL database, LLM calls, or Google Maps distance service. For production, host the backend separately and build the frontend with:
+
+```env
+VITE_DEMO_MODE=false
+VITE_API_BASE_URL=https://your-backend.example.com
+```
+
 ## Demo Run Checklist
 
 Before a demo, run:

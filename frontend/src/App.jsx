@@ -11,8 +11,10 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { getDemoChatResponse } from "./demoResponses.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
 const examplePrompts = [
   "Gabtoli to Mirpur 1",
@@ -52,6 +54,10 @@ function createAssistantMessage(content, cards = [], tone = "normal") {
 }
 
 async function sendChatMessage(message) {
+  if (IS_DEMO_MODE) {
+    return getDemoChatResponse(message);
+  }
+
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: {
