@@ -50,12 +50,6 @@ This board converts the PRD into hackathon-ready work items. Move cards across c
 - Add indexes for `bus_stops.stop_name` and `bus_stops.bus_id`.
 - Add seed script skeleton.
 
-### Scraper
-
-- Build Cheerio scraper for dhakabusservice.com route pages.
-- Extract bus name, stops, Bengali stop labels, seating type, fare range, and operating hours when available.
-- Output normalized `bus_data.json`.
-
 ### Fare Logic
 
 - Implement bus fare calculation using station count.
@@ -91,6 +85,9 @@ No cards yet.
 - Root workspace `package.json` added with basic scripts.
 - `.env.example` added.
 - README added with local setup steps.
+- Scraper added for dhakabusservice.com route data.
+- Scraper output generated at `backend/data/bus_data.json`.
+- Scraper validated with 183 bus records and ordered stops.
 
 ## MVP Milestone Checklist
 
