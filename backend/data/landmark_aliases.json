@@ -1,0 +1,182 @@
+[
+  {
+    "colloquialName": "gabtoli",
+    "canonicalName": "Gabtoli",
+    "zoneId": "gabtoli",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "gabtoli bus stand",
+    "canonicalName": "Gabtoli",
+    "zoneId": "gabtoli",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "mirpur one",
+    "canonicalName": "Mirpur 1",
+    "zoneId": "mirpur",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "mirpur-1",
+    "canonicalName": "Mirpur 1",
+    "zoneId": "mirpur",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "mirpur ten",
+    "canonicalName": "Mirpur 10",
+    "zoneId": "mirpur",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "mirpur-10",
+    "canonicalName": "Mirpur 10",
+    "zoneId": "mirpur",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "bashundhara",
+    "canonicalName": "Bashundhara",
+    "zoneId": "bashundhara",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "basundhara",
+    "canonicalName": "Bashundhara",
+    "zoneId": "bashundhara",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "jfp",
+    "canonicalName": "Jamuna Future Park",
+    "zoneId": "bashundhara",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "jamuna future park",
+    "canonicalName": "Jamuna Future Park",
+    "zoneId": "bashundhara",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "notun bazar",
+    "canonicalName": "Notun Bazar",
+    "zoneId": "badda",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "natun bazar",
+    "canonicalName": "Notun Bazar",
+    "zoneId": "badda",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "uttar badda",
+    "canonicalName": "Uttar Badda",
+    "zoneId": "badda",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "rampura bridge",
+    "canonicalName": "Rampura Bridge",
+    "zoneId": "rampura",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "farmgate",
+    "canonicalName": "Farmgate",
+    "zoneId": "farmgate",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "karwan bazar",
+    "canonicalName": "Karwan Bazar",
+    "zoneId": "karwan-bazar",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "kawran bazar",
+    "canonicalName": "Karwan Bazar",
+    "zoneId": "karwan-bazar",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "motijheel",
+    "canonicalName": "Motijheel",
+    "zoneId": "motijheel",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "gulistan",
+    "canonicalName": "Gulistan",
+    "zoneId": "gulistan",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "jatrabari",
+    "canonicalName": "Jatrabari",
+    "zoneId": "jatrabari",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "shanir akhra",
+    "canonicalName": "Shonir Akhra",
+    "zoneId": "jatrabari",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "shonir akhra",
+    "canonicalName": "Shonir Akhra",
+    "zoneId": "jatrabari",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "dhanmondi 27",
+    "canonicalName": "Dhanmondi 27",
+    "zoneId": "dhanmondi",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "shahbag",
+    "canonicalName": "Shahbag",
+    "zoneId": "shahbag",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "mohakhali",
+    "canonicalName": "Mohakhali",
+    "zoneId": "mohakhali",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "banani",
+    "canonicalName": "Banani",
+    "zoneId": "banani",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "gulshan one",
+    "canonicalName": "Gulshan 1",
+    "zoneId": "gulshan",
+    "languageCode": "banglish"
+  },
+  {
+    "colloquialName": "gulshan-1",
+    "canonicalName": "Gulshan 1",
+    "zoneId": "gulshan",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "airport",
+    "canonicalName": "Airport",
+    "zoneId": "airport",
+    "languageCode": "english"
+  },
+  {
+    "colloquialName": "uttara",
+    "canonicalName": "Uttara",
+    "zoneId": "uttara",
+    "languageCode": "banglish"
+  }
+]

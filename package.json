@@ -12,8 +12,11 @@
     "dev:backend": "npm run dev --workspace backend",
     "dev:frontend": "npm run dev --workspace frontend",
     "scrape:bus": "npm --workspace backend run scrape --",
+    "db:schema": "npm --workspace backend run db:schema",
+    "db:seed": "npm --workspace backend run db:seed --",
     "build": "npm run build --workspace frontend",
     "start": "npm run start --workspace backend",
+    "test": "npm --workspace backend test",
     "install:all": "npm install"
   },
   "devDependencies": {

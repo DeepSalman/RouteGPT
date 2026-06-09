@@ -44,19 +44,6 @@ This board converts the PRD into hackathon-ready work items. Move cards across c
 
 ## Ready
 
-### Database
-
-- Create PostgreSQL schema for `buses`, `bus_stops`, `landmarks`, and `route_reports`.
-- Add indexes for `bus_stops.stop_name` and `bus_stops.bus_id`.
-- Add seed script skeleton.
-
-### Fare Logic
-
-- Implement bus fare calculation using station count.
-- Implement student fare calculation with 50% waiver and BDT 10 minimum.
-- Implement CNG fare calculation.
-- Implement Pathao and Uber estimate calculation from configurable rate tables.
-
 ### LLM
 
 - Add Gemini 2.5 Flash client.
@@ -88,6 +75,15 @@ No cards yet.
 - Scraper added for dhakabusservice.com route data.
 - Scraper output generated at `backend/data/bus_data.json`.
 - Scraper validated with 183 bus records and ordered stops.
+- PostgreSQL schema added for `buses`, `bus_stops`, `landmarks`, and `route_reports`.
+- Direction-aware route lookup supported by stop order constraints and `bus_route_stop_pairs` view.
+- Schema apply command added as `npm run db:schema`.
+- Seed script added for scraped bus route data.
+- Starter landmark aliases added.
+- Manual route verification query added.
+- Fare module added for bus, student, CNG, Pathao, and Uber calculations.
+- Fare unit tests added with Gabtoli to Mirpur 1 policy coverage.
+- Root `npm test` command added.
 
 ## MVP Milestone Checklist
 

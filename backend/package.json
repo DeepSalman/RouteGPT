@@ -8,7 +8,9 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "scrape": "node --use-system-ca src/scraper.js",
-    "test": "echo \"No backend tests configured yet\""
+    "db:schema": "node src/db/applySchema.js",
+    "db:seed": "node src/db/seedDatabase.js",
+    "test": "node --test src/*.test.js"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
