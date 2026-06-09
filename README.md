@@ -13,6 +13,15 @@ RouteGPT/
   .env.example
 ```
 
+## Prerequisites
+
+- Node.js 20 or newer.
+- npm 10 or newer.
+- PostgreSQL 14 or newer for real bus-route lookup.
+- Gemini API key for LLM intent extraction.
+- Optional Groq API key for LLM fallback.
+- Optional Google Maps API key for CNG, Pathao, and Uber distance-based estimates.
+
 ## Local Setup
 
 1. Install dependencies:
@@ -33,7 +42,36 @@ On Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-3. Start both apps:
+3. Fill in the required values in `.env`:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/routegpt
+GEMINI_API_KEY=your_gemini_key
+GROQ_API_KEY=optional_groq_key
+GOOGLE_MAPS_API_KEY=optional_google_maps_key
+```
+
+Do not commit real API keys.
+
+4. Apply the database schema:
+
+```bash
+npm run db:schema
+```
+
+5. Seed the scraped bus data:
+
+```bash
+npm run db:seed
+```
+
+For a safe preview before writing data:
+
+```bash
+npm run db:seed -- --dry-run
+```
+
+6. Start both apps:
 
 ```bash
 npm run dev
@@ -46,11 +84,36 @@ npm run dev:backend
 npm run dev:frontend
 ```
 
+If `vite` is not recognized, dependencies are not installed yet. Run `npm install` from the repository root.
+
 ## Default Local URLs
 
 - Backend: `http://localhost:4000`
 - Backend health check: `http://localhost:4000/health`
 - Frontend: `http://localhost:5173`
+
+## Demo Run Checklist
+
+Before a demo, run:
+
+```bash
+npm test
+npm run build
+```
+
+Then open the frontend and try:
+
+- `Gabtoli theke Mirpur 1 bus e jabo`
+- `Mirpur 10 to Motijheel`
+- `Bashundhara theke Jatrabari bus`
+- `Gulshan theke Dhanmondi CNG te`
+- `airport to gabtoli uber`
+
+The manual QA notes live in:
+
+```text
+docs/MANUAL_QA.md
+```
 
 ## Frontend Chat UI
 
@@ -70,6 +133,9 @@ It includes:
 - Send button.
 - `POST /chat` connection to the backend.
 - Assistant reply rendering.
+- Compact bus, CNG, Pathao, and Uber result cards.
+- Student fare display for bus results.
+- `Report wrong info` confirmation state.
 - Basic account information modal shell.
 
 Set a custom backend URL with:
@@ -106,6 +172,8 @@ The backend workflow:
 7. Returns deterministic structured cards for the frontend.
 
 Important: bus routes always come from the local database. The LLM does not generate bus names, route facts, or fares.
+
+If no `GOOGLE_MAPS_API_KEY` is configured, bus-only answers can still work, but CNG and ride-hailing estimates will not have distance data.
 
 Example response shape:
 

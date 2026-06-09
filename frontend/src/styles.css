@@ -16,6 +16,7 @@ html,
 body,
 #root {
   width: 100%;
+  height: 100%;
   min-height: 100%;
 }
 
@@ -34,17 +35,22 @@ button {
 
 .app-layout {
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   background: #f8f9fb;
+  overflow: hidden;
 }
 
 .sidebar {
-  min-height: 100vh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid #d3d7de;
   background: #f2f3f5;
+  overflow: hidden;
 }
 
 .sidebar-title {
@@ -124,10 +130,11 @@ button {
 
 .main-panel {
   min-width: 0;
-  min-height: 100vh;
+  min-height: 0;
   display: grid;
   grid-template-rows: 72px minmax(0, 1fr) 136px;
   background: #fafbfc;
+  overflow: hidden;
 }
 
 .topbar {
@@ -135,7 +142,7 @@ button {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid #d3d7de;
-  padding: 0 clamp(20px, 12vw, 320px) 0 0;
+  padding: 0 24px;
   background: #fbfcfd;
 }
 
@@ -163,6 +170,8 @@ button {
 .chat-area {
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .empty-state {
@@ -220,23 +229,40 @@ button {
   display: grid;
   gap: 18px;
   margin: 0 auto;
-  padding: 36px 24px;
+  padding: 36px 24px 44px;
 }
 
 .message {
   display: flex;
 }
 
+.message-stack {
+  max-width: min(720px, 86%);
+  display: grid;
+  gap: 10px;
+}
+
 .message-user {
   justify-content: flex-end;
+}
+
+.message-user .message-stack {
+  justify-items: end;
 }
 
 .message-assistant {
   justify-content: flex-start;
 }
 
+.message-with-cards .message-stack {
+  width: min(720px, 92%);
+  max-width: 92%;
+  justify-items: stretch;
+}
+
 .message-bubble {
-  max-width: min(720px, 86%);
+  width: fit-content;
+  max-width: 100%;
   border: 1px solid #d9dde4;
   border-radius: 8px;
   padding: 14px 16px;
@@ -250,10 +276,167 @@ button {
   background: #1f6fe5;
 }
 
+.message-error .message-bubble {
+  border-color: #fecaca;
+  color: #7f1d1d;
+  background: #fef2f2;
+}
+
 .message-bubble p {
   margin: 0;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+.result-card-list {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.result-card {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  border: 1px solid #d9dde4;
+  border-radius: 8px;
+  padding: 12px;
+  color: #20242a;
+  background: #ffffff;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+  overflow-wrap: anywhere;
+}
+
+.result-card-header {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.result-card-header strong {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.result-mode {
+  width: fit-content;
+  border: 1px solid #cfd4dc;
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  background: #f8f9fb;
+}
+
+.fare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.fare-grid div {
+  min-width: 0;
+  border: 1px solid #e3e7ed;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fafbfc;
+}
+
+.fare-grid dt,
+.fare-grid dd {
+  margin: 0;
+}
+
+.fare-grid dt {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.fare-grid dd {
+  margin-top: 4px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.route-summary,
+.result-price,
+.result-note {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.route-summary {
+  color: #20242a;
+  font-size: 14px;
+}
+
+.result-price {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.result-note,
+.result-meta,
+.report-confirmation {
+  color: #667085;
+  font-size: 12px;
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.result-meta span {
+  border: 1px solid #e3e7ed;
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: #fafbfc;
+}
+
+.report-control {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.report-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #cfd4dc;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #242831;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.report-button:hover {
+  border-color: #98a2b3;
+  background: #f8f9fb;
+}
+
+.report-button:disabled {
+  cursor: default;
+  border-color: #b7e4c7;
+  color: #166534;
+  background: #f0fdf4;
+  opacity: 1;
+}
+
+.report-confirmation {
+  color: #166534;
+  line-height: 1.3;
 }
 
 .typing {
@@ -263,10 +446,33 @@ button {
   color: #475467;
 }
 
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.typing-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: pulse-dot 1200ms ease-in-out infinite;
+  opacity: 0.35;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 160ms;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 320ms;
+}
+
 .composer-shell {
   border-top: 1px solid #d3d7de;
   background: #fbfcfd;
-  padding: 22px 24px 14px;
+  padding: 22px 24px calc(14px + env(safe-area-inset-bottom));
 }
 
 .composer-shell p {
@@ -411,9 +617,27 @@ button {
   }
 }
 
+@keyframes pulse-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
 @media (min-width: 900px) {
+  .topbar {
+    padding: 0 clamp(28px, 4vw, 72px);
+  }
+
   .topbar strong {
-    margin-left: clamp(24px, 10vw, 320px);
+    margin-left: 0;
   }
 }
 
@@ -452,15 +676,24 @@ button {
   }
 
   .message-list {
-    padding: 24px 14px;
+    padding: 24px 14px 34px;
   }
 
-  .message-bubble {
+  .message-stack,
+  .message-with-cards .message-stack {
     max-width: 92%;
   }
 
+  .result-card-list {
+    grid-template-columns: 1fr;
+  }
+
+  .fare-grid {
+    grid-template-columns: 1fr;
+  }
+
   .composer-shell {
-    padding: 18px 14px 12px;
+    padding: 16px 14px calc(10px + env(safe-area-inset-bottom));
   }
 
   .composer {
@@ -474,6 +707,7 @@ button {
 
   .account-modal {
     min-height: 330px;
+    align-self: end;
   }
 
   .account-modal dl div {

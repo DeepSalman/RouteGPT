@@ -1,6 +1,8 @@
 import {
   Bookmark,
+  Check,
   Clock3,
+  Flag,
   Loader2,
   Plus,
   SendHorizontal,
@@ -18,6 +20,12 @@ const examplePrompts = [
   "Gulshan to Dhanmondi CNG"
 ];
 
+const loadingMessages = [
+  "Reading your route request...",
+  "Checking matching transport options...",
+  "Calculating fares..."
+];
+
 const initialAccount = {
   name: "User Name",
   email: "user@example.com",
@@ -33,12 +41,13 @@ function createUserMessage(content) {
   };
 }
 
-function createAssistantMessage(content, cards = []) {
+function createAssistantMessage(content, cards = [], tone = "normal") {
   return {
     id: crypto.randomUUID(),
     role: "assistant",
     content,
-    cards
+    cards,
+    tone
   };
 }
 
@@ -54,10 +63,73 @@ async function sendChatMessage(message) {
   const body = await response.json().catch(() => null);
 
   if (!response.ok || !body?.ok) {
-    throw new Error(body?.error || "RouteGPT could not answer this route yet.");
+    const error = new Error(body?.error || "RouteGPT could not answer this route yet.");
+    error.status = response.status;
+    throw error;
   }
 
   return body;
+}
+
+function getFriendlyChatError(error) {
+  if (error?.status === 400) {
+    return error.message || "Please enter a route question with a starting point and destination.";
+  }
+
+  if (
+    error instanceof TypeError ||
+    /failed to fetch|network|load failed/i.test(error?.message || "")
+  ) {
+    return `I can't reach the RouteGPT backend right now. Start it with npm run dev:backend, then try again.`;
+  }
+
+  return "I couldn't finish this route request. Please try again in a moment.";
+}
+
+function formatMoney(value, currency = "BDT") {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return `${currency} --`;
+  }
+
+  return `${currency} ${Math.round(value)}`;
+}
+
+function formatFareRange(range, currency = "BDT") {
+  if (!range || typeof range.min !== "number" || typeof range.max !== "number") {
+    return `~${currency} --`;
+  }
+
+  return `~${currency} ${Math.round(range.min)}-${Math.round(range.max)}`;
+}
+
+function formatDistance(card) {
+  const parts = [];
+
+  if (typeof card.distanceKm === "number") {
+    parts.push(`${card.distanceKm} km`);
+  }
+
+  if (typeof card.durationMin === "number") {
+    parts.push(`${card.durationMin} min`);
+  }
+
+  return parts.join(" - ");
+}
+
+function getReportKey(card, index) {
+  const route = card.route || {};
+
+  return [
+    card.type,
+    card.provider,
+    card.vehicle,
+    card.busId,
+    route.originStopName,
+    route.destinationStopName,
+    index
+  ]
+    .filter(Boolean)
+    .join(":");
 }
 
 function Sidebar({ onNewChat }) {
@@ -134,11 +206,143 @@ function EmptyState({ onPromptClick }) {
   );
 }
 
-function ChatMessage({ message }) {
+function ReportButton({ reportKey }) {
+  const [isReported, setIsReported] = useState(false);
+
   return (
-    <article className={`message message-${message.role}`}>
-      <div className="message-bubble">
-        <p>{message.content}</p>
+    <div className="report-control" data-report-key={reportKey}>
+      <button
+        className="report-button"
+        type="button"
+        disabled={isReported}
+        onClick={() => setIsReported(true)}
+      >
+        {isReported ? <Check size={15} /> : <Flag size={15} />}
+        <span>{isReported ? "Reported" : "Report wrong info"}</span>
+      </button>
+      {isReported && <span className="report-confirmation">Thanks, we received your report.</span>}
+    </div>
+  );
+}
+
+function BusResultCard({ card, index }) {
+  const currency = card.fare?.currency || "BDT";
+  const origin = card.route?.originStopName || "Origin";
+  const destination = card.route?.destinationStopName || "Destination";
+  const stationCount = card.route?.stationCount;
+
+  return (
+    <article className="result-card result-card-bus">
+      <header className="result-card-header">
+        <span className="result-mode">Bus</span>
+        <strong>{card.title || "Bus option"}</strong>
+      </header>
+
+      <dl className="fare-grid">
+        <div>
+          <dt>Fare</dt>
+          <dd>{formatMoney(card.fare?.general, currency)}</dd>
+        </div>
+        <div>
+          <dt>Student</dt>
+          <dd>{formatMoney(card.fare?.student, currency)}</dd>
+        </div>
+      </dl>
+
+      <p className="route-summary">
+        {origin} -&gt; {destination}
+      </p>
+
+      <div className="result-meta">
+        {typeof stationCount === "number" && <span>{stationCount} stops</span>}
+        {card.subtitle && <span>{card.subtitle}</span>}
+      </div>
+
+      <ReportButton reportKey={getReportKey(card, index)} />
+    </article>
+  );
+}
+
+function CngResultCard({ card, index }) {
+  const distance = formatDistance(card);
+
+  return (
+    <article className="result-card">
+      <header className="result-card-header">
+        <span className="result-mode">CNG</span>
+        <strong>{formatMoney(card.fare?.amount, card.fare?.currency || "BDT")}</strong>
+      </header>
+
+      {distance && <p className="route-summary">{distance}</p>}
+      <p className="result-note">
+        {card.fare?.isNight ? "Night fare estimate included." : "Distance-based estimate."}
+      </p>
+
+      <ReportButton reportKey={getReportKey(card, index)} />
+    </article>
+  );
+}
+
+function RideResultCard({ card, index }) {
+  const distance = formatDistance(card);
+
+  return (
+    <article className="result-card">
+      <header className="result-card-header">
+        <span className="result-mode">{card.provider === "uber" ? "Uber" : "Pathao"}</span>
+        <strong>{card.title || "Ride estimate"}</strong>
+      </header>
+
+      <p className="result-price">{formatFareRange(card.fareRange, card.currency || "BDT")}</p>
+      {distance && <p className="route-summary">{distance}</p>}
+      <p className="result-note">{card.note || "Actual app fare may vary."}</p>
+
+      <ReportButton reportKey={getReportKey(card, index)} />
+    </article>
+  );
+}
+
+function ResultCard({ card, index }) {
+  if (card.type === "bus") {
+    return <BusResultCard card={card} index={index} />;
+  }
+
+  if (card.type === "cng") {
+    return <CngResultCard card={card} index={index} />;
+  }
+
+  return <RideResultCard card={card} index={index} />;
+}
+
+function ResultCards({ cards }) {
+  if (!Array.isArray(cards) || cards.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="result-card-list" aria-label="Transport result cards">
+      {cards.map((card, index) => (
+        <ResultCard key={getReportKey(card, index)} card={card} index={index} />
+      ))}
+    </div>
+  );
+}
+
+function ChatMessage({ message }) {
+  const hasCards = Array.isArray(message.cards) && message.cards.length > 0;
+  const toneClass = message.tone === "error" ? " message-error" : "";
+
+  return (
+    <article
+      className={`message message-${message.role}${hasCards ? " message-with-cards" : ""}${toneClass}`}
+    >
+      <div className="message-stack">
+        {message.content && (
+          <div className="message-bubble">
+            <p>{message.content}</p>
+          </div>
+        )}
+        <ResultCards cards={message.cards} />
       </div>
     </article>
   );
@@ -146,12 +350,12 @@ function ChatMessage({ message }) {
 
 function Composer({ value, disabled, onChange, onSubmit }) {
   return (
-    <form className="composer" onSubmit={onSubmit}>
+    <form className="composer" aria-busy={disabled} onSubmit={onSubmit}>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        placeholder="Ask a route..."
+        placeholder={disabled ? "Finding route options..." : "Ask a route..."}
         aria-label="Ask a route"
       />
       <button className="send-button" type="submit" disabled={disabled || !value.trim()}>
@@ -204,11 +408,30 @@ function AccountModal({ account, onClose }) {
   );
 }
 
+function LoadingMessage({ step }) {
+  return (
+    <article className="message message-assistant">
+      <div className="message-stack">
+        <div className="message-bubble typing">
+          <Loader2 className="spin" size={18} />
+          <span>{loadingMessages[step]}</span>
+          <span className="typing-dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -217,6 +440,19 @@ export default function App() {
       behavior: "smooth"
     });
   }, [messages, isSending]);
+
+  useEffect(() => {
+    if (!isSending) {
+      setLoadingStep(0);
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      setLoadingStep((current) => (current + 1) % loadingMessages.length);
+    }, 1400);
+
+    return () => window.clearInterval(interval);
+  }, [isSending]);
 
   async function submitMessage(event) {
     event.preventDefault();
@@ -237,9 +473,7 @@ export default function App() {
     } catch (error) {
       setMessages((current) => [
         ...current,
-        createAssistantMessage(
-          `${error.message} Check that the backend is running at ${API_BASE_URL}.`
-        )
+        createAssistantMessage(getFriendlyChatError(error), [], "error")
       ]);
     } finally {
       setIsSending(false);
@@ -269,14 +503,7 @@ export default function App() {
               {messages.map((message) => (
                 <ChatMessage key={message.id} message={message} />
               ))}
-              {isSending && (
-                <article className="message message-assistant">
-                  <div className="message-bubble typing">
-                    <Loader2 className="spin" size={18} />
-                    <span>Finding route options...</span>
-                  </div>
-                </article>
-              )}
+              {isSending && <LoadingMessage step={loadingStep} />}
             </section>
           )}
         </main>

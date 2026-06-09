@@ -20,10 +20,8 @@ This board converts the PRD into hackathon-ready work items. Move cards across c
 
 ### Frontend
 
-- Add route result card design.
 - Add loading state for chat response.
 - Add empty state for missing origin/destination.
-- Add "Report wrong info" interaction.
 - Add mobile responsive polish.
 
 ### Backend
@@ -87,6 +85,11 @@ No cards yet.
 - Basic React chat UI added.
 - Frontend connects chat input to backend `POST /chat`.
 - Empty state, message list, loading state, and assistant reply rendering added.
+- Compact transport result cards added for bus, CNG, Pathao, and Uber results.
+- Student fare display added to bus result cards.
+- `Report wrong info` button added with a lightweight confirmation state.
+- Step 12 QA matrix documented in `docs/MANUAL_QA.md` with 12/12 mocked workflow cases passing.
+- Step 13 polish pass improved loading states, frontend error copy, responsive layout rules, and README run instructions.
 
 ## MVP Milestone Checklist
 
@@ -110,9 +113,9 @@ No cards yet.
 
 - [x] Chat UI accepts user messages.
 - [x] Chat UI renders assistant response.
-- [ ] Transport result cards render bus, CNG, Pathao, and Uber options.
-- [ ] Mode filtering is visible in results.
-- [ ] Report wrong info button is present.
+- [x] Transport result cards render bus, CNG, Pathao, and Uber options.
+- [x] Mode filtering is visible in results.
+- [x] Report wrong info button is present.
 
 ### Milestone 4: Demo Readiness
 
@@ -122,6 +125,8 @@ No cards yet.
 - [ ] No-route case is handled clearly.
 - [ ] Ambiguous stop case asks clarification.
 - [ ] Demo script is written.
+
+Mocked workflow QA for the route/language/no-route/ambiguous cases passed on 2026-06-10. Keep the checklist open until the same cases pass against a seeded local database and live frontend.
 
 ## Sprint 1: Hackathon MVP
 
