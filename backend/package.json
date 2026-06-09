@@ -10,7 +10,7 @@
     "scrape": "node --use-system-ca src/scraper.js",
     "db:schema": "node src/db/applySchema.js",
     "db:seed": "node src/db/seedDatabase.js",
-    "test": "node --test src/*.test.js"
+    "test": "node --test \"src/**/*.test.js\""
   },
   "dependencies": {
     "cheerio": "^1.0.0",

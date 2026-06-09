@@ -44,14 +44,6 @@ This board converts the PRD into hackathon-ready work items. Move cards across c
 
 ## Ready
 
-### LLM
-
-- Add Gemini 2.5 Flash client.
-- Add Groq Llama 3.3 70B fallback client.
-- Add intent extraction prompt.
-- Add response formatting prompt.
-- Add strict JSON parsing and retry path.
-
 ## In Progress
 
 No cards currently in progress.
@@ -84,6 +76,17 @@ No cards yet.
 - Fare module added for bus, student, CNG, Pathao, and Uber calculations.
 - Fare unit tests added with Gabtoli to Mirpur 1 policy coverage.
 - Root `npm test` command added.
+- Gemini intent extraction client added.
+- Groq fallback intent extraction client added.
+- Strict intent JSON parser, retry flow, and fallback orchestration added.
+- Mocked tests added for Banglish, Bengali, English, student fare, clarification, retry, and fallback.
+- `POST /chat` backend endpoint added.
+- Chat workflow added for intent extraction, bus lookup, fare calculation, distance lookup, and frontend cards.
+- Mode filtering added so bus-only queries skip distance and CNG-only queries skip bus lookup.
+- Mocked chat workflow tests added.
+- Basic React chat UI added.
+- Frontend connects chat input to backend `POST /chat`.
+- Empty state, message list, loading state, and assistant reply rendering added.
 
 ## MVP Milestone Checklist
 
@@ -96,17 +99,17 @@ No cards yet.
 
 ### Milestone 2: Backend API
 
-- [ ] `POST /chat` endpoint exists.
-- [ ] LLM extracts origin, destination, and modes.
+- [x] `POST /chat` endpoint exists.
+- [x] LLM extracts origin, destination, and modes.
 - [ ] Bus lookup works by stop order.
-- [ ] Bus fare and student fare calculate correctly.
+- [x] Bus fare and student fare calculate correctly.
 - [ ] Distance API integration works.
-- [ ] CNG, Pathao, and Uber estimates return correctly.
+- [x] CNG, Pathao, and Uber estimates return correctly.
 
 ### Milestone 3: Frontend
 
-- [ ] Chat UI accepts user messages.
-- [ ] Chat UI renders assistant response.
+- [x] Chat UI accepts user messages.
+- [x] Chat UI renders assistant response.
 - [ ] Transport result cards render bus, CNG, Pathao, and Uber options.
 - [ ] Mode filtering is visible in results.
 - [ ] Report wrong info button is present.

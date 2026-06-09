@@ -1,0 +1,137 @@
+const SUPPORTED_MODES = Object.freeze(["bus", "cng", "pathao", "uber"]);
+
+const INTENT_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "origin",
+    "destination",
+    "modes",
+    "studentFare",
+    "needsClarification",
+    "clarificationQuestion"
+  ],
+  properties: {
+    origin: {
+      anyOf: [{ type: "string" }, { type: "null" }]
+    },
+    destination: {
+      anyOf: [{ type: "string" }, { type: "null" }]
+    },
+    modes: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: SUPPORTED_MODES
+      }
+    },
+    studentFare: {
+      type: "boolean"
+    },
+    needsClarification: {
+      type: "boolean"
+    },
+    clarificationQuestion: {
+      anyOf: [{ type: "string" }, { type: "null" }]
+    }
+  }
+});
+
+const INTENT_EXTRACTION_SYSTEM_PROMPT = `
+You are RouteGPT's transport intent extraction layer for Dhaka, Bangladesh.
+
+Return only one JSON object. Do not return Markdown, comments, or prose.
+
+Your job:
+- Understand Banglish, Bengali, and English transport queries.
+- Extract origin and destination as concise English canonical-looking Dhaka place names.
+- Detect transport modes only when the user mentions them.
+- If no mode is mentioned, use all modes: ["bus","cng","pathao","uber"].
+- Detect student fare intent when the user asks as a student or asks for student fare.
+- If origin or destination is missing, set the missing field to null and needsClarification to true.
+- If a location is ambiguous, set needsClarification to true and ask a short clarification question.
+- Never invent transport routes, bus names, fares, or facts.
+
+Allowed modes:
+- "bus"
+- "cng"
+- "pathao"
+- "uber"
+
+Mode hints:
+- "bus", "বাস", "local", "local bus" -> "bus"
+- "cng", "সিএনজি" -> "cng"
+- "pathao", "পাঠাও" -> "pathao"
+- "uber", "উবার" -> "uber"
+- "bike" without a provider usually means ride-hailing, so include ["pathao","uber"] unless another mode is mentioned.
+
+Return this exact JSON shape:
+{
+  "origin": "Gabtoli",
+  "destination": "Mirpur 1",
+  "modes": ["bus"],
+  "studentFare": false,
+  "needsClarification": false,
+  "clarificationQuestion": null
+}
+
+Examples:
+User: "Gabtoli theke Mirpur 1 bus e jabo"
+JSON: {"origin":"Gabtoli","destination":"Mirpur 1","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null}
+
+User: "mirpur 10 to motijheel"
+JSON: {"origin":"Mirpur 10","destination":"Motijheel","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null}
+
+User: "গুলশান থেকে ধানমন্ডি সিএনজি"
+JSON: {"origin":"Gulshan","destination":"Dhanmondi","modes":["cng"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null}
+
+User: "Student fare koto Gabtoli to Mirpur 1?"
+JSON: {"origin":"Gabtoli","destination":"Mirpur 1","modes":["bus","cng","pathao","uber"],"studentFare":true,"needsClarification":false,"clarificationQuestion":null}
+
+User: "farmgate boss?"
+JSON: {"origin":null,"destination":"Farmgate","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":true,"clarificationQuestion":"Where are you starting from?"}
+`.trim();
+
+function buildIntentExtractionPrompt(userMessage) {
+  return `
+Extract a Dhaka transport intent from this user message.
+
+User message:
+${JSON.stringify(userMessage)}
+
+Return only valid JSON matching the required shape.
+`.trim();
+}
+
+function buildIntentRetryPrompt(userMessage, invalidResponse, validationError) {
+  return `
+Your previous response was invalid for RouteGPT intent extraction.
+
+User message:
+${JSON.stringify(userMessage)}
+
+Invalid response:
+${JSON.stringify(invalidResponse)}
+
+Validation error:
+${validationError}
+
+Return only one valid JSON object with this shape:
+{
+  "origin": string or null,
+  "destination": string or null,
+  "modes": array of "bus" | "cng" | "pathao" | "uber",
+  "studentFare": boolean,
+  "needsClarification": boolean,
+  "clarificationQuestion": string or null
+}
+`.trim();
+}
+
+export {
+  INTENT_EXTRACTION_SYSTEM_PROMPT,
+  INTENT_SCHEMA,
+  SUPPORTED_MODES,
+  buildIntentExtractionPrompt,
+  buildIntentRetryPrompt
+};

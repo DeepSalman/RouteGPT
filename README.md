@@ -52,6 +52,77 @@ npm run dev:frontend
 - Backend health check: `http://localhost:4000/health`
 - Frontend: `http://localhost:5173`
 
+## Frontend Chat UI
+
+The basic React chat interface lives in:
+
+```text
+frontend/src/App.jsx
+frontend/src/styles.css
+```
+
+It includes:
+
+- RouteGPT top header.
+- Left navigation sidebar.
+- Empty state with example route prompts.
+- Bottom chat input.
+- Send button.
+- `POST /chat` connection to the backend.
+- Assistant reply rendering.
+- Basic account information modal shell.
+
+Set a custom backend URL with:
+
+```env
+VITE_API_BASE_URL=http://localhost:4000
+```
+
+## Backend Chat API
+
+Main endpoint:
+
+```http
+POST /chat
+Content-Type: application/json
+```
+
+Request body:
+
+```json
+{
+  "message": "Gabtoli theke Mirpur 1 bus e jabo"
+}
+```
+
+The backend workflow:
+
+1. Validates the request body.
+2. Extracts origin, destination, modes, and student fare intent with the LLM layer.
+3. Queries PostgreSQL for bus routes only when `bus` is requested.
+4. Calculates bus and student fares from stop order.
+5. Fetches Google Maps distance only when CNG or ride-hailing estimates are requested.
+6. Calculates CNG, Pathao, and Uber estimates.
+7. Returns deterministic structured cards for the frontend.
+
+Important: bus routes always come from the local database. The LLM does not generate bus names, route facts, or fares.
+
+Example response shape:
+
+```json
+{
+  "ok": true,
+  "type": "answer",
+  "reply": "Gabtoli to Mirpur 1:\n\nBus:\n1. Achim Paribahan...",
+  "intent": {
+    "origin": "Gabtoli",
+    "destination": "Mirpur 1",
+    "modes": ["bus"]
+  },
+  "cards": []
+}
+```
+
 ## Database Schema
 
 Apply the PostgreSQL schema after setting `DATABASE_URL` in `.env`:
@@ -115,6 +186,40 @@ Implemented policies:
 - Student bus fare: 50% of general fare, BDT 10 minimum.
 - CNG fare: BDT 50 for first 2 km, then BDT 15/km, with optional 25% night surcharge.
 - Ride-hailing estimates: configurable Pathao and Uber rate tables.
+
+## LLM Intent Extraction
+
+Intent extraction lives in:
+
+```text
+backend/src/llm/
+```
+
+Production flow:
+
+1. Gemini 2.5 Flash parses the user message first.
+2. The parser validates strict JSON.
+3. If JSON is malformed, the system retries once with a repair prompt.
+4. If Gemini fails, Groq `llama-3.3-70b-versatile` is used as fallback.
+
+Expected normalized output:
+
+```json
+{
+  "origin": "Gabtoli",
+  "destination": "Mirpur 1",
+  "modes": ["bus"],
+  "studentFare": false,
+  "needsClarification": false,
+  "clarificationQuestion": null
+}
+```
+
+Run the mocked intent extraction tests:
+
+```bash
+npm test
+```
 
 ## Scrape Bus Route Data
 
