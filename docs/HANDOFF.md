@@ -305,6 +305,7 @@ Important guardrails:
 - LLM does not invent bus routes.
 - LLM does not invent fare rules.
 - The conversation persona prompt forbids stating bus names, routes, stops, fares, or schedules from memory.
+- Unknown places are refused, not estimated: when no bus route matches and an origin/destination cannot be verified against stops or landmarks (e.g. "Badda to dmd"), RouteGPT replies that it could not find the place instead of inventing distance-based fares. Applies to both backend mode and the static demo.
 - Backend/database are source of truth.
 - Invalid JSON triggers retry/fallback.
 - Missing or ambiguous locations trigger clarification.

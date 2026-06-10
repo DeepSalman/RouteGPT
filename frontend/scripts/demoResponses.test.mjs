@@ -138,6 +138,23 @@ test("still estimates CNG fares", async () => {
   assert.ok(result.results.cng, "expected a CNG card");
 });
 
+test("refuses to invent fares for unknown destinations", async () => {
+  const result = await getDemoChatResponse("Badda to dmd");
+
+  assert.equal(result.type, "clarification");
+  assert.match(result.reply, /couldn't find "Dmd"/);
+  assert.match(result.reply, /won't guess a fare/);
+  assert.equal(result.cards.length, 0);
+});
+
+test("verified places without a direct bus still get estimates", async () => {
+  const result = await getDemoChatResponse("Kuril to Mirpur 1");
+
+  assert.equal(result.type, "answer");
+  assert.equal(result.results.buses.length, 0);
+  assert.ok(result.results.cng, "expected a CNG estimate for known places");
+});
+
 test("still asks clarification for ambiguous Mirpur queries", async () => {
   const result = await getDemoChatResponse("mirpur to dhanmondi");
 

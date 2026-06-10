@@ -883,6 +883,51 @@ function createBusRouteDetailResponse(message, requestedBusName) {
   };
 }
 
+// Estimates must never be invented for places we cannot verify. A place is
+// known when it resolves to a demo landmark or matches any stop in the
+// static bus data.
+function isKnownDemoPlace(place) {
+  if (!place) return false;
+  if (resolveLandmark(place)) return true;
+
+  const terms = buildLookupTerms(place);
+  if (!terms.length) return false;
+
+  return STATIC_BUS_ROUTES.some((bus) =>
+    (bus.stops || []).some((stop) => stopMatches(stop, terms))
+  );
+}
+
+function createUnknownPlaceResponse(message, unknownPlaces) {
+  const quoted = unknownPlaces.map((place) => `"${place}"`).join(" or ");
+  const reply = `I couldn't find ${quoted} in my route data yet, so I won't guess a fare. Check the spelling or try a nearby area name, like "Gabtoli to Mirpur 1".`;
+
+  return {
+    ok: true,
+    type: "clarification",
+    message,
+    intent: {
+      origin: null,
+      destination: null,
+      modes: ["bus", "cng", "pathao", "uber"],
+      needsClarification: true,
+      clarificationQuestion: reply
+    },
+    reply,
+    cards: [],
+    results: {
+      buses: [],
+      cng: null,
+      rideHailing: []
+    },
+    meta: {
+      source: "static-demo",
+      inventedRoutes: false,
+      unknownPlaces
+    }
+  };
+}
+
 function createNoRouteResponse(message) {
   return {
     ok: true,
@@ -1011,6 +1056,16 @@ export async function getDemoChatResponse(message) {
     }
 
     return createNoRouteResponse(message);
+  }
+
+  if (!staticBusRoutes.length && !demoRoute) {
+    const unknownPlaces = [route.origin, route.destination].filter(
+      (place) => !isKnownDemoPlace(place)
+    );
+
+    if (unknownPlaces.length) {
+      return createUnknownPlaceResponse(message, unknownPlaces);
+    }
   }
 
   const busRoutes = staticBusRoutes.length ? staticBusRoutes : demoRoute ? [demoRoute] : [];

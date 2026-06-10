@@ -272,6 +272,50 @@ test("missing bus route falls back to CNG and ride estimates", async () => {
   assert.match(result.reply, /Pathao Bike/);
 });
 
+test("refuses to invent estimates when a place is unknown", async () => {
+  const routeRepository = createRouteRepository([]);
+  routeRepository.hasStopMatching = async ({ place }) => place !== "Dmd";
+  const distanceService = createDistanceService();
+
+  const result = await handleChatMessage("Badda to dmd", {
+    intentExtractor: createIntentExtractor({
+      ...baseIntent,
+      origin: "Badda",
+      destination: "Dmd",
+      modes: ["bus", "cng", "pathao", "uber"]
+    }),
+    routeRepository,
+    distanceService
+  });
+
+  assert.equal(result.type, "clarification");
+  assert.match(result.reply, /couldn't find "Dmd"/);
+  assert.match(result.reply, /won't guess a fare/);
+  assert.equal(result.cards.length, 0);
+  assert.deepEqual(result.meta.unknownPlaces, ["Dmd"]);
+  assert.equal(distanceService.calls.length, 0);
+});
+
+test("verified places without a direct bus still get fallback estimates", async () => {
+  const routeRepository = createRouteRepository([]);
+  routeRepository.hasStopMatching = async () => true;
+
+  const result = await handleChatMessage("Kuril Flyover to Notun Bazar bus", {
+    intentExtractor: createIntentExtractor({
+      ...baseIntent,
+      origin: "Kuril Flyover",
+      destination: "Notun Bazar",
+      modes: ["bus"]
+    }),
+    routeRepository,
+    distanceService: createDistanceService({ distanceKm: 6, durationMin: 25 })
+  });
+
+  assert.equal(result.type, "answer");
+  assert.ok(result.results.cng, "expected a CNG fallback estimate");
+  assert.equal(result.results.rideHailing.length, 4);
+});
+
 test("mode filtering skips bus database lookup for cng-only query", async () => {
   const routeRepository = createRouteRepository();
   const distanceService = createDistanceService();

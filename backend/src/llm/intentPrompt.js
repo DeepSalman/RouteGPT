@@ -80,6 +80,7 @@ Your job:
 - Treat common Banglish typo variants as the same words: tomar/tumar/tomr = your, nam/naam/name = name, ki = what, kemon acho/aso/asen = how are you, dhonnobad = thanks, bhalo = good.
 - Never use conversational words such as tomar, tumar, nam, naam, ki, kemon, acho, bhalo, dhonnobad, or hello as origin or destination place names. If the message mentions no plausible Dhaka location, classify it as conversation instead of guessing places.
 - Users often type only the first word of a longer stop name, like "kuril" for "Kuril Bishwa Road" or "Kuril Chourasta". Keep the short name exactly as the user wrote it; the database resolves partial names.
+- If an origin or destination looks like random letters or an abbreviation you do not recognize (such as "dmd" or "xkz"), keep it exactly as written. Never expand it into a guessed place name; the backend verifies every place against the route database.
 - Detect transport modes only when the user mentions them.
 - If no mode is mentioned, use all modes: ["bus","cng","pathao","uber"].
 - Detect student fare intent when the user asks as a student or asks for student fare.

@@ -1,3 +1,4 @@
+import { isKnownDhakaLandmark } from "../distance.js";
 import {
   calculateBusFare,
   calculateCngFare,
@@ -143,6 +144,26 @@ function buildRideCards(distance, modes, rideVehicles) {
       distanceKm: estimate.distanceKm,
       note: estimate.note
     }));
+}
+
+// Distance-based estimates must never be invented for places we cannot
+// verify. A place counts as known when it resolves to a Dhaka landmark or
+// matches a stop in the database; without a verifying repository we keep the
+// permissive legacy behavior.
+async function findUnknownPlaces(intent, routeRepository) {
+  if (!routeRepository || typeof routeRepository.hasStopMatching !== "function") {
+    return [];
+  }
+
+  const unknownPlaces = [];
+
+  for (const place of [intent.origin, intent.destination].filter(Boolean)) {
+    if (isKnownDhakaLandmark(place)) continue;
+    if (await routeRepository.hasStopMatching({ place })) continue;
+    unknownPlaces.push(place);
+  }
+
+  return unknownPlaces;
 }
 
 async function maybeGetDistance({ intent, modes, distanceService }) {
@@ -310,6 +331,39 @@ async function handleChatMessage(
           maxResults: maxBusResults
         })
       : [];
+
+  if (!routes.length) {
+    const unknownPlaces = await findUnknownPlaces(intent, routeRepository);
+
+    if (unknownPlaces.length) {
+      const reply = `I couldn't find ${unknownPlaces
+        .map((place) => `"${place}"`)
+        .join(" or ")} in my route data yet, so I won't guess a fare. Check the spelling or try a nearby area name, like "Gabtoli to Mirpur 1".`;
+
+      return {
+        ok: true,
+        type: "clarification",
+        message: normalizedMessage,
+        intent: {
+          ...intent,
+          needsClarification: true,
+          clarificationQuestion: reply
+        },
+        reply,
+        cards: [],
+        results: {
+          buses: [],
+          cng: null,
+          rideHailing: []
+        },
+        meta: {
+          inventedRoutes: false,
+          unknownPlaces
+        }
+      };
+    }
+  }
+
   const effectiveModes =
     intent.modes.includes("bus") && routes.length === 0
       ? addPrivateTransportFallbackModes(intent.modes)

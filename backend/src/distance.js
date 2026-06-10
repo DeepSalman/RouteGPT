@@ -347,9 +347,14 @@ function createApproximateDistanceService() {
   };
 }
 
+function isKnownDhakaLandmark(place) {
+  return resolveLandmark(place) !== null;
+}
+
 export {
   createApproximateDistanceService,
   createGoogleDistanceService,
   estimateDhakaDistance,
+  isKnownDhakaLandmark,
   normalizePlaceForDistance
 };

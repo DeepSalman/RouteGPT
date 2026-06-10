@@ -248,6 +248,49 @@ function buildRouteLookupSql() {
   `;
 }
 
+function buildStopExistsSql() {
+  return `
+    WITH query_params AS (
+      SELECT
+        $1::text AS place_name,
+        regexp_replace(lower($1::text), '[[:space:][:punct:]]+', '', 'g') AS place_compact
+    )
+    SELECT 1 AS found
+    FROM query_params
+    WHERE EXISTS (
+      SELECT 1
+      FROM bus_stops stop
+      WHERE stop.stop_name ILIKE '%' || query_params.place_name || '%'
+         OR query_params.place_name ILIKE '%' || stop.stop_name || '%'
+         OR coalesce(stop.stop_name_bn, '') ILIKE '%' || query_params.place_name || '%'
+         OR regexp_replace(lower(coalesce(stop.stop_name, '')), '[[:space:][:punct:]]+', '', 'g') = query_params.place_compact
+         OR regexp_replace(lower(coalesce(stop.stop_name_bn, '')), '[[:space:][:punct:]]+', '', 'g') = query_params.place_compact
+         OR (
+           length(query_params.place_compact) >= 5
+           AND similarity(
+             regexp_replace(lower(coalesce(stop.stop_name, '')), '[[:space:][:punct:]]+', '', 'g'),
+             query_params.place_compact
+           ) > 0.55
+         )
+         OR similarity(stop.stop_name, query_params.place_name) > 0.35
+         OR (
+           query_params.place_name !~ '[0-9]'
+           AND stop.stop_name !~ '[0-9]'
+           AND length(split_part(lower(query_params.place_name), ' ', 1)) >= 5
+           AND split_part(lower(stop.stop_name), ' ', 1) = split_part(lower(query_params.place_name), ' ', 1)
+         )
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM landmarks
+      WHERE lower(colloquial_name) = lower(query_params.place_name)
+         OR colloquial_name ILIKE '%' || query_params.place_name || '%'
+         OR query_params.place_name ILIKE '%' || colloquial_name || '%'
+         OR similarity(colloquial_name, query_params.place_name) > 0.45
+    )
+  `;
+}
+
 function buildBusRouteDetailSql() {
   return `
     WITH
@@ -375,8 +418,24 @@ function createRouteRepository({ query, limit = DEFAULT_LIMIT }) {
       ]);
 
       return result.rows.map(mapBusRouteDetailRow);
+    },
+
+    async hasStopMatching({ place }) {
+      const normalizedPlace = normalizeSearchText(place);
+
+      if (!normalizedPlace) {
+        return false;
+      }
+
+      const result = await query(buildStopExistsSql(), [normalizedPlace]);
+      return result.rows.length > 0;
     }
   };
 }
 
-export { buildBusRouteDetailSql, buildRouteLookupSql, createRouteRepository };
+export {
+  buildBusRouteDetailSql,
+  buildRouteLookupSql,
+  buildStopExistsSql,
+  createRouteRepository
+};

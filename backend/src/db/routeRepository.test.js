@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildBusRouteDetailSql,
-  buildRouteLookupSql
+  buildRouteLookupSql,
+  buildStopExistsSql,
+  createRouteRepository
 } from "./routeRepository.js";
 
 test("route lookup SQL supports compact and Bengali stop matching", () => {
@@ -21,6 +23,30 @@ test("route lookup SQL matches shortened first-word place names without crossing
   assert.match(sql, /split_part\(lower\(route\.origin_stop_name\), ' ', 1\)/);
   assert.match(sql, /split_part\(lower\(route\.destination_stop_name\), ' ', 1\)/);
   assert.match(sql, /!~ '\[0-9\]'/);
+});
+
+test("stop existence SQL checks stops and landmarks with fuzzy matching", () => {
+  const sql = buildStopExistsSql();
+
+  assert.match(sql, /bus_stops/);
+  assert.match(sql, /landmarks/);
+  assert.match(sql, /similarity/);
+  assert.match(sql, /split_part\(lower\(stop\.stop_name\), ' ', 1\)/);
+});
+
+test("hasStopMatching returns whether the place exists in the database", async () => {
+  const calls = [];
+  const repository = createRouteRepository({
+    query: async (sql, params) => {
+      calls.push(params);
+      return { rows: params[0] === "Badda" ? [{ found: 1 }] : [] };
+    }
+  });
+
+  assert.equal(await repository.hasStopMatching({ place: "Badda" }), true);
+  assert.equal(await repository.hasStopMatching({ place: "Dmd" }), false);
+  assert.equal(await repository.hasStopMatching({ place: "   " }), false);
+  assert.equal(calls.length, 2);
 });
 
 test("bus route detail SQL supports fuzzy bus-name matching and ordered stops", () => {
