@@ -71,6 +71,30 @@ function buildBusCard(route) {
   };
 }
 
+function buildBusRouteDetailCard(routeDetail) {
+  const stops = Array.isArray(routeDetail.stops) ? routeDetail.stops : [];
+
+  return {
+    type: "bus_route",
+    title: routeDetail.busName,
+    subtitle: routeDetail.seatingType,
+    busId: routeDetail.busId,
+    stops,
+    operatingHours: {
+      start: routeDetail.startTime,
+      end: routeDetail.endTime
+    },
+    totalStops: stops.length,
+    reportAction: {
+      label: "Report wrong info",
+      payload: {
+        busId: routeDetail.busId,
+        busName: routeDetail.busName
+      }
+    }
+  };
+}
+
 function buildCngCard(distance, isNightFare = false) {
   const fare = calculateCngFare({
     distanceKm: distance.distanceKm,
@@ -192,6 +216,43 @@ async function handleChatMessage(
         buses: [],
         cng: null,
         rideHailing: []
+      }
+    };
+  }
+
+  if (intent.intentType === "bus_route") {
+    const routeDetails =
+      routeRepository && typeof routeRepository.findBusRouteByName === "function"
+        ? await routeRepository.findBusRouteByName({
+            busName: intent.busName,
+            maxResults: 1
+          })
+        : [];
+    const busRouteCards = routeDetails.map(buildBusRouteDetailCard);
+
+    return {
+      ok: true,
+      type: "bus_route",
+      message: normalizedMessage,
+      intent,
+      reply: formatChatReply({
+        intent,
+        busCards: [],
+        busRouteCards,
+        cngCard: null,
+        rideCards: [],
+        distance: null
+      }),
+      cards: busRouteCards,
+      results: {
+        buses: [],
+        busRoute: busRouteCards[0] || null,
+        cng: null,
+        rideHailing: []
+      },
+      meta: {
+        busRouteSource: "database",
+        inventedRoutes: false
       }
     };
   }

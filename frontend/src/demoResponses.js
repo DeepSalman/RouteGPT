@@ -5,6 +5,7 @@ const DEFAULT_DISTANCE = Object.freeze({
   distanceKm: 7.4,
   durationMin: 32
 });
+const BANGLA_RANGE = /[\u0980-\u09FF]/u;
 const DEMO_AVERAGE_SPEED_KMPH = 14;
 const DEMO_ROAD_FACTOR = 1.35;
 const DEMO_LANDMARKS = Object.freeze({
@@ -145,6 +146,58 @@ function cleanPlaceName(value) {
     .split(" ")
     .map((part) => (/^[0-9]+$/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()))
     .join(" ");
+}
+
+function cleanDemoBusName(value) {
+  const cleaned = String(value || "")
+    .replace(
+      /^(?:show|tell|give|bolo|dao|dekhao|\u09A6\u09C7\u0996\u09BE\u0993|\u09AC\u09B2\u09CB|\u09A6\u09BE\u0993)\s+/i,
+      ""
+    )
+    .replace(
+      /(?:\b(?:bus|route|full|entire|er|of|show|tell|give|bolo|dao|dekhao|please|pls)\b|(?:\u09AC\u09BE\u09B8|\u09AC\u09BE\u09B8\u09C7\u09B0|\u09B0\u09C1\u099F|\u098F\u09B0|\u09AA\u09C1\u09B0\u09BE|\u09B8\u09AE\u09CD\u09AA\u09C2\u09B0\u09CD\u09A3|\u09AC\u09B2\u09CB|\u09AC\u09B2\u09C1\u09A8|\u09A6\u09BE\u0993|\u09A6\u09C7\u0996\u09BE\u0993))/gi,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return null;
+
+  if (BANGLA_RANGE.test(cleaned)) {
+    return cleaned;
+  }
+
+  return cleaned
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function parseBusRouteQuery(message) {
+  const text = String(message || "").replace(/\s+/g, " ").trim();
+
+  if (!text) return null;
+
+  if (/\b(?:from|to|theke)\b|\u09A5\u09C7\u0995\u09C7|\u09B9\u09A4\u09C7|\u099F\u09C1/i.test(text)) {
+    return null;
+  }
+
+  const patterns = [
+    /(?:route\s+of|\u09B0\u09C1\u099F)\s+(.+?)(?:\s+bus|\s+\u09AC\u09BE\u09B8)?$/i,
+    /(.+?)\s+(?:bus|\u09AC\u09BE\u09B8|\u09AC\u09BE\u09B8\u09C7\u09B0)(?:\s*(?:er|\u098F\u09B0))?\s+(?:route|\u09B0\u09C1\u099F)/i,
+    /(.+?)\s+(?:er|\u098F\u09B0)\s+(?:route|\u09B0\u09C1\u099F)/i,
+    /(.+?)\s+(?:route|\u09B0\u09C1\u099F)\s+(?:bolo|dao|show|dekhao|\u09AC\u09B2\u09CB|\u09AC\u09B2\u09C1\u09A8|\u09A6\u09BE\u0993|\u09A6\u09C7\u0996\u09BE\u0993)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    const busName = cleanDemoBusName(match[1]);
+    if (busName) return busName;
+  }
+
+  return null;
 }
 
 function parseRouteFromMessage(message) {
@@ -324,6 +377,40 @@ function findStaticBusRoutes(origin, destination, maxResults = 5) {
     .slice(0, maxResults);
 }
 
+function scoreLookupMatch(term, value) {
+  if (!term || !value) return 0;
+  if (term === value) return 100;
+  if (term.length >= 3 && (term.includes(value) || value.includes(term))) return 80;
+  if (isCloseLookupMatch(term, value)) return 60;
+  return 0;
+}
+
+function findStaticBusByName(busName) {
+  const terms = getLookupVariants(busName);
+
+  if (!terms.length) return null;
+
+  const matches = STATIC_BUS_ROUTES
+    .map((bus) => {
+      const values = [
+        bus.name,
+        bus.nameBn,
+        bus.slug,
+        String(bus.slug || "").replace(/-?bus-?route.*$/i, "")
+      ].flatMap(getLookupVariants);
+      const score = Math.max(
+        0,
+        ...terms.flatMap((term) => values.map((value) => scoreLookupMatch(term, value)))
+      );
+
+      return { bus, score };
+    })
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score || a.bus.name.localeCompare(b.bus.name));
+
+  return matches[0]?.bus || null;
+}
+
 function findDemoRoute(normalized) {
   return DEMO_ROUTES.find((route) =>
     route.patterns.every((pattern) => normalized.includes(pattern))
@@ -431,6 +518,30 @@ function createBusCard(route, index = 0) {
         busId: route.slug || `demo-bus-${index + 1}`,
         originStopName: route.originStopName || route.origin,
         destinationStopName: route.destinationStopName || route.destination
+      }
+    }
+  };
+}
+
+function createBusRouteDetailCard(bus) {
+  const stops = Array.isArray(bus.stops) ? bus.stops : [];
+
+  return {
+    type: "bus_route",
+    title: bus.name,
+    subtitle: bus.seatingType || "Bus route",
+    busId: bus.slug,
+    stops,
+    operatingHours: {
+      start: bus.operatingHours?.start || null,
+      end: bus.operatingHours?.end || null
+    },
+    totalStops: stops.length,
+    reportAction: {
+      label: "Report wrong info",
+      payload: {
+        busId: bus.slug,
+        busName: bus.name
       }
     }
   };
@@ -559,6 +670,85 @@ function createReply({ route, cards, modes, distance }) {
   return lines.join("\n");
 }
 
+function createBusRouteDetailReply(card) {
+  const stops = Array.isArray(card.stops) ? card.stops : [];
+  const lines = [`${card.title} route:`];
+  const hourParts = [card.operatingHours?.start, card.operatingHours?.end].filter(Boolean);
+
+  if (card.subtitle) {
+    lines.push(`Type: ${card.subtitle}`);
+  }
+
+  if (hourParts.length) {
+    lines.push(`Hours: ${hourParts.join(" - ")}`);
+  }
+
+  lines.push("", stops.map((stop) => stop.name).filter(Boolean).join(" -> "));
+
+  if (stops.length) {
+    lines.push("", `${stops.length} stops total.`);
+  }
+
+  return lines.join("\n");
+}
+
+function createBusRouteDetailResponse(message, requestedBusName) {
+  const bus = findStaticBusByName(requestedBusName);
+  const intent = {
+    intentType: "bus_route",
+    busName: requestedBusName,
+    origin: null,
+    destination: null,
+    modes: ["bus"],
+    needsClarification: false
+  };
+
+  if (!bus) {
+    return {
+      ok: true,
+      type: "bus_route",
+      message,
+      intent,
+      reply: `I could not find a bus named ${requestedBusName} in the database yet.`,
+      cards: [],
+      results: {
+        buses: [],
+        busRoute: null,
+        cng: null,
+        rideHailing: []
+      },
+      meta: {
+        source: "static-demo",
+        inventedRoutes: false
+      }
+    };
+  }
+
+  const card = createBusRouteDetailCard(bus);
+
+  return {
+    ok: true,
+    type: "bus_route",
+    message,
+    intent: {
+      ...intent,
+      busName: bus.name
+    },
+    reply: createBusRouteDetailReply(card),
+    cards: [card],
+    results: {
+      buses: [],
+      busRoute: card,
+      cng: null,
+      rideHailing: []
+    },
+    meta: {
+      source: "static-demo",
+      inventedRoutes: false
+    }
+  };
+}
+
 function createNoRouteResponse(message) {
   return {
     ok: true,
@@ -638,10 +828,14 @@ export async function getDemoChatResponse(message) {
   await wait(DEMO_DELAY_MS);
 
   const normalized = normalizeMessage(message);
-  const parsedRoute = parseRouteFromMessage(message);
+  const busRouteQuery = parseBusRouteQuery(message);
 
   if (isGreetingMessage(normalized)) {
     return createConversationResponse(message);
+  }
+
+  if (busRouteQuery) {
+    return createBusRouteDetailResponse(message, busRouteQuery);
   }
 
   if (
@@ -652,6 +846,7 @@ export async function getDemoChatResponse(message) {
     return createClarificationResponse(message);
   }
 
+  const parsedRoute = parseRouteFromMessage(message);
   const staticBusRoutes = parsedRoute
     ? findStaticBusRoutes(parsedRoute.origin, parsedRoute.destination)
     : [];

@@ -27,6 +27,15 @@ function createDefaultRouteRepository() {
       });
 
       return repository.findBusRoutes({ origin, destination, maxResults });
+    },
+
+    async findBusRouteByName({ busName, maxResults }) {
+      const { createRouteRepository } = await import("./routeRepository.js");
+      const repository = createRouteRepository({
+        query: (sql, params) => dbPool.query(sql, params)
+      });
+
+      return repository.findBusRouteByName({ busName, maxResults });
     }
   };
 }

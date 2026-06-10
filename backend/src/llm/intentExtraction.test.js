@@ -73,6 +73,38 @@ test("classifies a greeting locally without calling an LLM", async () => {
   assert.equal(primaryClient.calls.length, 0);
 });
 
+test("detects a named bus route request locally without calling an LLM", async () => {
+  const primaryClient = createMockClient({
+    responses: [new Error("should not be called")]
+  });
+
+  const intent = await extractIntent("Raida bus er route bolo", {
+    primaryClient,
+    includeMeta: true
+  });
+
+  assert.equal(intent.intentType, "bus_route");
+  assert.equal(intent.busName, "Raida");
+  assert.equal(intent.origin, null);
+  assert.equal(intent.destination, null);
+  assert.deepEqual(intent.modes, ["bus"]);
+  assert.equal(intent.needsClarification, false);
+  assert.equal(intent.meta.provider, "local");
+  assert.equal(intent.meta.model, "bus-route-rule");
+  assert.equal(primaryClient.calls.length, 0);
+});
+
+test("detects a Bengali named bus route request locally", async () => {
+  const intent = await extractIntent("রাইদা বাসের রুট বলো", {
+    includeMeta: true
+  });
+
+  assert.equal(intent.intentType, "bus_route");
+  assert.equal(intent.busName, "রাইদা");
+  assert.deepEqual(intent.modes, ["bus"]);
+  assert.equal(intent.meta.provider, "local");
+});
+
 test("uses local route parsing when providers are unavailable", async () => {
   const intent = await extractIntent("Bashundhara theke Jatrabari bus e jabo", {
     includeMeta: true

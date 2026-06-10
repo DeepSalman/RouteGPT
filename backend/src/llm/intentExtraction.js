@@ -77,6 +77,32 @@ function isHelpMessage(message) {
   return /^(help|what can you do|how does this work|ki korte paro)\??$/i.test(normalized);
 }
 
+function cleanBusName(value) {
+  const cleaned = cleanNullableText(value)
+    ?.replace(/^(?:show|tell|give|bolo|dao|dekhao|দেখাও|বলো|দাও)\s+/i, "")
+    .replace(
+      /(?:\b(?:bus|route|full|entire|er|of|show|tell|give|bolo|dao|dekhao|please|pls)\b|(?:বাস|বাসের|রুট|এর|পুরা|সম্পূর্ণ|বলো|বলুন|দাও|দেখাও))/gi,
+      " "
+    )
+    .replace(
+      /(?:\u09AC\u09BE\u09B8|\u09AC\u09BE\u09B8\u09C7\u09B0|\u09B0\u09C1\u099F|\u098F\u09B0|\u09AA\u09C1\u09B0\u09BE|\u09B8\u09AE\u09CD\u09AA\u09C2\u09B0\u09CD\u09A3|\u09AC\u09B2\u09CB|\u09AC\u09B2\u09C1\u09A8|\u09A6\u09BE\u0993|\u09A6\u09C7\u0996\u09BE\u0993)/g,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return null;
+
+  if (BANGLA_RANGE.test(cleaned)) {
+    return cleaned;
+  }
+
+  return cleaned
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function normalizePlaceName(value) {
   const cleaned = cleanNullableText(value)
     ?.replace(LEADING_ROUTE_WORDS, "")
@@ -100,6 +126,51 @@ function normalizePlaceName(value) {
       return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
     })
     .join(" ");
+}
+
+function parseLocalBusRouteIntent(message) {
+  const text = cleanNullableText(message);
+  if (!text) return null;
+
+  if (/\u09A5\u09C7\u0995\u09C7|\u09B9\u09A4\u09C7|\u099F\u09C1/i.test(text)) {
+    return null;
+  }
+
+  if (/\b(?:from|to|theke)\b|থেকে|হতে|টু/i.test(text)) {
+    return null;
+  }
+
+  const busRoutePatterns = [
+    /(?:route\s+of|\u09B0\u09C1\u099F)\s+(.+?)(?:\s+bus|\s+\u09AC\u09BE\u09B8)?$/i,
+    /(.+?)\s+(?:bus|\u09AC\u09BE\u09B8|\u09AC\u09BE\u09B8\u09C7\u09B0)(?:\s*(?:er|\u098F\u09B0))?\s+(?:route|\u09B0\u09C1\u099F)/i,
+    /(.+?)\s+(?:er|\u098F\u09B0)\s+(?:route|\u09B0\u09C1\u099F)/i,
+    /(.+?)\s+(?:route|\u09B0\u09C1\u099F)\s+(?:bolo|dao|show|dekhao|\u09AC\u09B2\u09CB|\u09AC\u09B2\u09C1\u09A8|\u09A6\u09BE\u0993|\u09A6\u09C7\u0996\u09BE\u0993)/i,
+    /(?:route\s+of|রুট)\s+(.+?)(?:\s+bus|\s+বাস)?$/i,
+    /(.+?)\s+(?:bus|বাস|বাসের)(?:\s*(?:er|এর|এর))?\s+(?:route|রুট)/i,
+    /(.+?)\s+(?:er|এর)\s+(?:route|রুট)/i,
+    /(.+?)\s+(?:route|রুট)\s+(?:bolo|dao|show|dekhao|বলো|বলুন|দাও|দেখাও)/i
+  ];
+
+  for (const pattern of busRoutePatterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    const busName = cleanBusName(match[1]);
+    if (!busName) continue;
+
+    return normalizeIntentPayload({
+      intentType: "bus_route",
+      busName,
+      origin: null,
+      destination: null,
+      modes: ["bus"],
+      studentFare: false,
+      needsClarification: false,
+      clarificationQuestion: null
+    });
+  }
+
+  return null;
 }
 
 function detectModesFromText(message) {
@@ -235,13 +306,23 @@ function normalizeIntentPayload(payload) {
     throw new Error("Intent payload must be a JSON object.");
   }
 
-  const intentType = payload.intentType === "conversation" ? "conversation" : "route";
+  const intentType =
+    payload.intentType === "conversation" || payload.intentType === "bus_route"
+      ? payload.intentType
+      : "route";
   const origin = cleanNullableText(payload.origin);
   const destination = cleanNullableText(payload.destination);
-  const modes = intentType === "conversation" ? [] : normalizeModes(payload.modes);
+  const busName = cleanNullableText(payload.busName);
+  const modes =
+    intentType === "conversation"
+      ? []
+      : intentType === "bus_route"
+        ? ["bus"]
+        : normalizeModes(payload.modes);
   const studentFare = Boolean(payload.studentFare);
   const needsClarification = Boolean(
-    intentType === "route" && (payload.needsClarification || !origin || !destination)
+    (intentType === "route" && (payload.needsClarification || !origin || !destination)) ||
+      (intentType === "bus_route" && (payload.needsClarification || !busName))
   );
   const clarificationQuestion = cleanNullableText(payload.clarificationQuestion);
 
@@ -249,11 +330,14 @@ function normalizeIntentPayload(payload) {
     intentType,
     origin,
     destination,
+    busName,
     modes,
     studentFare,
     needsClarification,
     clarificationQuestion:
-      needsClarification && !clarificationQuestion
+      needsClarification && !clarificationQuestion && intentType === "bus_route"
+        ? "Which bus route do you want to see?"
+        : needsClarification && !clarificationQuestion
         ? buildDefaultClarificationQuestion({ origin, destination })
         : clarificationQuestion,
     conversationReply: cleanNullableText(payload.conversationReply),
@@ -385,6 +469,20 @@ async function extractIntent(
       : conversationIntent;
   }
 
+  const busRouteIntent = parseLocalBusRouteIntent(message);
+  if (busRouteIntent) {
+    return includeMeta
+      ? {
+          ...busRouteIntent,
+          meta: {
+            provider: "local",
+            model: "bus-route-rule",
+            fallbackUsed: false
+          }
+        }
+      : busRouteIntent;
+  }
+
   const providerErrors = [];
   let resolvedPrimaryClient = primaryClient;
   let resolvedFallbackClient = fallbackClient;
@@ -423,7 +521,10 @@ async function extractIntent(
     }
   }
 
-  const localRouteIntent = parseLocalRouteIntent(message) || buildLocalClarificationIntent();
+  const localRouteIntent =
+    parseLocalRouteIntent(message) ||
+    parseLocalBusRouteIntent(message) ||
+    buildLocalClarificationIntent();
   return includeMeta
     ? {
         ...localRouteIntent,

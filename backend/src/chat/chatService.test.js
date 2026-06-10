@@ -31,18 +31,41 @@ const mockRoute = Object.freeze({
   stationCount: 4
 });
 
+const mockBusRouteDetail = Object.freeze({
+  busId: 2,
+  busName: "Raida",
+  busNameBn: "রাইদা",
+  seatingType: "Semi-Seating Service",
+  fareRange: null,
+  startTime: "06:00 AM",
+  endTime: "11:00 PM",
+  stops: [
+    { order: 1, name: "Postogola", nameBn: "পোস্তগোলা", raw: "Postogola (পোস্তগোলা)" },
+    { order: 2, name: "Dholairpar", nameBn: "ধোলাইরপাড়", raw: "Dholairpar (ধোলাইরপাড়)" },
+    { order: 3, name: "Jatrabari", nameBn: "যাত্রাবাড়ি", raw: "Jatrabari (যাত্রাবাড়ি)" },
+    { order: 4, name: "Airport", nameBn: "বিমানবন্দর", raw: "Airport (বিমানবন্দর)" },
+    { order: 5, name: "Dia Bari", nameBn: "দিয়া বাড়ি", raw: "Dia Bari (দিয়া বাড়ি)" }
+  ]
+});
+
 function createIntentExtractor(intent) {
   return async () => intent;
 }
 
-function createRouteRepository(routes = [mockRoute]) {
+function createRouteRepository(routes = [mockRoute], busRouteDetails = [mockBusRouteDetail]) {
   const calls = [];
+  const busRouteCalls = [];
 
   return {
     calls,
+    busRouteCalls,
     async findBusRoutes(input) {
       calls.push(input);
       return routes;
+    },
+    async findBusRouteByName(input) {
+      busRouteCalls.push(input);
+      return busRouteDetails;
     }
   };
 }
@@ -113,6 +136,45 @@ test("greets instead of treating hello as a route query", async () => {
   assert.equal(result.cards.length, 0);
   assert.equal(routeRepository.calls.length, 0);
   assert.equal(distanceService.calls.length, 0);
+});
+
+test("answers a named bus route request with full ordered stops", async () => {
+  const routeRepository = createRouteRepository();
+  const distanceService = createDistanceService();
+
+  const result = await handleChatMessage("Raida bus er route bolo", {
+    intentExtractor: createIntentExtractor({
+      intentType: "bus_route",
+      busName: "Raida",
+      origin: null,
+      destination: null,
+      modes: ["bus"],
+      studentFare: false,
+      needsClarification: false,
+      clarificationQuestion: null,
+      conversationReply: null
+    }),
+    routeRepository,
+    distanceService
+  });
+
+  assert.equal(result.type, "bus_route");
+  assert.equal(result.cards.length, 1);
+  assert.equal(result.cards[0].type, "bus_route");
+  assert.equal(result.cards[0].title, "Raida");
+  assert.equal(result.cards[0].stops.length, 5);
+  assert.equal(result.cards[0].stops[0].name, "Postogola");
+  assert.equal(result.cards[0].stops.at(-1).name, "Dia Bari");
+  assert.equal(routeRepository.calls.length, 0);
+  assert.equal(routeRepository.busRouteCalls.length, 1);
+  assert.deepEqual(routeRepository.busRouteCalls[0], {
+    busName: "Raida",
+    maxResults: 1
+  });
+  assert.equal(distanceService.calls.length, 0);
+  assert.match(result.reply, /Raida route/);
+  assert.match(result.reply, /Postogola/);
+  assert.match(result.reply, /Dia Bari/);
 });
 
 test("missing bus route falls back to CNG and ride estimates", async () => {

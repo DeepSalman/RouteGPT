@@ -24,6 +24,43 @@ function mapRouteRow(row) {
   };
 }
 
+function parseStops(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function mapBusRouteDetailRow(row) {
+  const stops = parseStops(row.stops).map((stop) => ({
+    order: Number(stop.order),
+    name: stop.name,
+    nameBn: stop.nameBn,
+    raw: stop.raw
+  }));
+
+  return {
+    busId: Number(row.bus_id),
+    busName: row.bus_name,
+    busNameBn: row.bus_name_bn,
+    seatingType: row.seating_type,
+    fareRange: row.fare_range,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    stops,
+    matchScore: row.match_score === null ? null : Number(row.match_score)
+  };
+}
+
 function buildRouteLookupSql() {
   return `
     WITH
@@ -189,6 +226,97 @@ function buildRouteLookupSql() {
   `;
 }
 
+function buildBusRouteDetailSql() {
+  return `
+    WITH
+    query_params AS (
+      SELECT
+        $1::text AS bus_name,
+        regexp_replace(lower($1::text), '[[:space:][:punct:]]+', '', 'g') AS bus_compact
+    ),
+    searchable_buses AS (
+      SELECT
+        bus.*,
+        regexp_replace(lower(coalesce(bus.name, '')), '[[:space:][:punct:]]+', '', 'g') AS name_compact,
+        regexp_replace(lower(coalesce(bus.name_bn, '')), '[[:space:][:punct:]]+', '', 'g') AS name_bn_compact
+      FROM buses bus
+    ),
+    matched_buses AS (
+      SELECT
+        bus.*,
+        GREATEST(
+          similarity(bus.name, query_params.bus_name),
+          similarity(coalesce(bus.name_bn, ''), query_params.bus_name),
+          similarity(bus.name_compact, query_params.bus_compact),
+          similarity(bus.name_bn_compact, query_params.bus_compact),
+          CASE
+            WHEN lower(bus.name) = lower(query_params.bus_name) THEN 1
+            WHEN lower(coalesce(bus.name_bn, '')) = lower(query_params.bus_name) THEN 1
+            WHEN bus.name_compact = query_params.bus_compact THEN 0.95
+            WHEN bus.name_bn_compact = query_params.bus_compact THEN 0.95
+            WHEN bus.name ILIKE '%' || query_params.bus_name || '%' THEN 0.85
+            WHEN coalesce(bus.name_bn, '') ILIKE '%' || query_params.bus_name || '%' THEN 0.85
+            WHEN query_params.bus_name ILIKE '%' || bus.name || '%' THEN 0.85
+            ELSE 0
+          END
+        ) AS match_score
+      FROM searchable_buses bus
+      CROSS JOIN query_params
+      WHERE
+        lower(bus.name) = lower(query_params.bus_name)
+        OR lower(coalesce(bus.name_bn, '')) = lower(query_params.bus_name)
+        OR bus.name ILIKE '%' || query_params.bus_name || '%'
+        OR coalesce(bus.name_bn, '') ILIKE '%' || query_params.bus_name || '%'
+        OR query_params.bus_name ILIKE '%' || bus.name || '%'
+        OR bus.name_compact = query_params.bus_compact
+        OR bus.name_bn_compact = query_params.bus_compact
+        OR (
+          length(query_params.bus_compact) >= 4
+          AND (
+            similarity(bus.name_compact, query_params.bus_compact) > 0.55
+            OR similarity(bus.name_bn_compact, query_params.bus_compact) > 0.55
+          )
+        )
+        OR similarity(bus.name, query_params.bus_name) > 0.4
+        OR similarity(coalesce(bus.name_bn, ''), query_params.bus_name) > 0.4
+    )
+    SELECT
+      bus.id AS bus_id,
+      bus.name AS bus_name,
+      bus.name_bn AS bus_name_bn,
+      bus.seating_type,
+      bus.fare_range,
+      bus.start_time,
+      bus.end_time,
+      json_agg(
+        json_build_object(
+          'order', stop.stop_order,
+          'name', stop.stop_name,
+          'nameBn', stop.stop_name_bn,
+          'raw', stop.raw_name
+        )
+        ORDER BY stop.stop_order
+      ) AS stops,
+      bus.match_score
+    FROM matched_buses bus
+    JOIN bus_stops stop
+      ON stop.bus_id = bus.id
+    GROUP BY
+      bus.id,
+      bus.name,
+      bus.name_bn,
+      bus.seating_type,
+      bus.fare_range,
+      bus.start_time,
+      bus.end_time,
+      bus.match_score
+    ORDER BY
+      bus.match_score DESC,
+      bus.name ASC
+    LIMIT $2
+  `;
+}
+
 function createRouteRepository({ query, limit = DEFAULT_LIMIT }) {
   if (typeof query !== "function") {
     throw new Error("createRouteRepository requires a query function.");
@@ -210,8 +338,23 @@ function createRouteRepository({ query, limit = DEFAULT_LIMIT }) {
       ]);
 
       return result.rows.map(mapRouteRow);
+    },
+
+    async findBusRouteByName({ busName, maxResults = 1 }) {
+      const normalizedBusName = normalizeSearchText(busName);
+
+      if (!normalizedBusName) {
+        return [];
+      }
+
+      const result = await query(buildBusRouteDetailSql(), [
+        normalizedBusName,
+        maxResults
+      ]);
+
+      return result.rows.map(mapBusRouteDetailRow);
     }
   };
 }
 
-export { buildRouteLookupSql, createRouteRepository };
+export { buildBusRouteDetailSql, buildRouteLookupSql, createRouteRepository };

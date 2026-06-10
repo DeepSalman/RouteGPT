@@ -379,6 +379,10 @@ button {
   overflow-wrap: anywhere;
 }
 
+.result-card-route {
+  grid-column: 1 / -1;
+}
+
 .result-card-header {
   min-width: 0;
   display: grid;
@@ -470,6 +474,28 @@ button {
   border-radius: 8px;
   padding: 2px 7px;
   background: #f8f8f9;
+}
+
+.route-stop-list {
+  max-height: 280px;
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 6px 0 4px 22px;
+  color: #343541;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.route-stop-list li {
+  padding-left: 2px;
+}
+
+.route-stop-list li::marker {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .report-control {

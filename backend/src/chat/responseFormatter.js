@@ -8,9 +8,10 @@ function formatFareRange(range, currency = "BDT") {
 
 function formatChatReply({
   intent,
-  busCards,
+  busCards = [],
+  busRouteCards = [],
   cngCard,
-  rideCards,
+  rideCards = [],
   distance,
   effectiveModes = intent.modes
 }) {
@@ -23,6 +24,37 @@ function formatChatReply({
 
   if (intent.needsClarification) {
     return intent.clarificationQuestion;
+  }
+
+  if (intent.intentType === "bus_route") {
+    const routeCard = busRouteCards[0];
+
+    if (!routeCard) {
+      return `I could not find a bus named ${intent.busName} in the database yet.`;
+    }
+
+    const stops = Array.isArray(routeCard.stops) ? routeCard.stops : [];
+    const lines = [`${routeCard.title} route:`];
+    const hourParts = [
+      routeCard.operatingHours?.start,
+      routeCard.operatingHours?.end
+    ].filter(Boolean);
+
+    if (routeCard.subtitle) {
+      lines.push(`Type: ${routeCard.subtitle}`);
+    }
+
+    if (hourParts.length) {
+      lines.push(`Hours: ${hourParts.join(" - ")}`);
+    }
+
+    lines.push("", stops.map((stop) => stop.name).filter(Boolean).join(" -> "));
+
+    if (stops.length) {
+      lines.push("", `${stops.length} stops total.`);
+    }
+
+    return lines.join("\n");
   }
 
   const lines = [`${intent.origin} to ${intent.destination}:`];

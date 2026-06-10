@@ -277,6 +277,38 @@ function BusResultCard({ card, index }) {
   );
 }
 
+function BusRouteDetailCard({ card, index }) {
+  const stops = Array.isArray(card.stops) ? card.stops : [];
+  const hourParts = [card.operatingHours?.start, card.operatingHours?.end].filter(Boolean);
+
+  return (
+    <article className="result-card result-card-route">
+      <header className="result-card-header">
+        <span className="result-mode">Full route</span>
+        <strong>{card.title || "Bus route"}</strong>
+      </header>
+
+      <div className="result-meta">
+        {typeof card.totalStops === "number" && <span>{card.totalStops} stops</span>}
+        {card.subtitle && <span>{card.subtitle}</span>}
+        {hourParts.length > 0 && <span>{hourParts.join(" - ")}</span>}
+      </div>
+
+      {stops.length > 0 && (
+        <ol className="route-stop-list" aria-label={`${card.title} stops`}>
+          {stops.map((stop, stopIndex) => (
+            <li key={`${stop.order || stopIndex}-${stop.name || stop.raw}`}>
+              <span>{stop.name || stop.raw}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <ReportButton reportKey={getReportKey(card, index)} />
+    </article>
+  );
+}
+
 function CngResultCard({ card, index }) {
   const distance = formatDistance(card);
 
@@ -319,6 +351,10 @@ function RideResultCard({ card, index }) {
 function ResultCard({ card, index }) {
   if (card.type === "bus") {
     return <BusResultCard card={card} index={index} />;
+  }
+
+  if (card.type === "bus_route") {
+    return <BusRouteDetailCard card={card} index={index} />;
   }
 
   if (card.type === "cng") {

@@ -5,6 +5,7 @@ const INTENT_SCHEMA = Object.freeze({
   additionalProperties: false,
   required: [
     "intentType",
+    "busName",
     "origin",
     "destination",
     "modes",
@@ -16,7 +17,10 @@ const INTENT_SCHEMA = Object.freeze({
   properties: {
     intentType: {
       type: "string",
-      enum: ["route", "conversation"]
+      enum: ["route", "conversation", "bus_route"]
+    },
+    busName: {
+      anyOf: [{ type: "string" }, { type: "null" }]
     },
     origin: {
       anyOf: [{ type: "string" }, { type: "null" }]
@@ -54,7 +58,9 @@ Return only one JSON object. Do not return Markdown, comments, or prose.
 Your job:
 - Understand Banglish, Bengali, and English transport queries.
 - Classify greetings, thanks, and general app-help messages as conversation, not route.
+- Classify requests for a named bus's full route as bus_route.
 - Extract origin and destination as concise English canonical-looking Dhaka place names.
+- For bus_route requests, extract busName and set origin and destination to null.
 - Preserve Bengali place names when the user writes Bengali.
 - Treat missing spaces, punctuation differences, and small Banglish spelling mistakes as normal user input.
 - Examples: "shonirakra" can mean "Shonir Akhra"; "শনিরআখরা" can mean "শনির আখরা".
@@ -66,6 +72,7 @@ Your job:
 - Never invent transport routes, bus names, fares, or facts.
 - For conversation messages, set intentType to "conversation", origin and destination to null, modes to [], needsClarification to false, and include a short conversationReply.
 - For transport requests, set intentType to "route".
+- For named bus route requests like "Raida bus er route bolo", set intentType to "bus_route".
 
 Allowed modes:
 - "bus"
@@ -83,6 +90,7 @@ Mode hints:
 Return this exact JSON shape:
 {
   "intentType": "route",
+  "busName": null,
   "origin": "Gabtoli",
   "destination": "Mirpur 1",
   "modes": ["bus"],
@@ -94,28 +102,31 @@ Return this exact JSON shape:
 
 Examples:
 User: "Gabtoli theke Mirpur 1 bus e jabo"
-JSON: {"intentType":"route","origin":"Gabtoli","destination":"Mirpur 1","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+JSON: {"intentType":"route","busName":null,"origin":"Gabtoli","destination":"Mirpur 1","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "mirpur 10 to motijheel"
-JSON: {"intentType":"route","origin":"Mirpur 10","destination":"Motijheel","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+JSON: {"intentType":"route","busName":null,"origin":"Mirpur 10","destination":"Motijheel","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "গুলশান থেকে ধানমন্ডি সিএনজি"
-JSON: {"intentType":"route","origin":"Gulshan","destination":"Dhanmondi","modes":["cng"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+JSON: {"intentType":"route","busName":null,"origin":"Gulshan","destination":"Dhanmondi","modes":["cng"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "Student fare koto Gabtoli to Mirpur 1?"
-JSON: {"intentType":"route","origin":"Gabtoli","destination":"Mirpur 1","modes":["bus","cng","pathao","uber"],"studentFare":true,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+JSON: {"intentType":"route","busName":null,"origin":"Gabtoli","destination":"Mirpur 1","modes":["bus","cng","pathao","uber"],"studentFare":true,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "farmgate boss?"
-JSON: {"intentType":"route","origin":null,"destination":"Farmgate","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":true,"clarificationQuestion":"Where are you starting from?","conversationReply":null}
+JSON: {"intentType":"route","busName":null,"origin":null,"destination":"Farmgate","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":true,"clarificationQuestion":"Where are you starting from?","conversationReply":null}
 
 User: "hello"
-JSON: {"intentType":"conversation","origin":null,"destination":null,"modes":[],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":"Hello! Tell me your starting point and destination in Dhaka."}
+JSON: {"intentType":"conversation","busName":null,"origin":null,"destination":null,"modes":[],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":"Hello! Tell me your starting point and destination in Dhaka."}
+
+User: "Raida bus er route bolo"
+JSON: {"intentType":"bus_route","busName":"Raida","origin":null,"destination":null,"modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "shonirakra to gabtoli bus"
-JSON: {"intentType":"route","origin":"Shonir Akhra","destination":"Gabtoli","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+JSON: {"intentType":"route","busName":null,"origin":"Shonir Akhra","destination":"Gabtoli","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "শনিরআখরা থেকে গাবতলি বাস"
-JSON: {"intentType":"route","origin":"শনিরআখরা","destination":"গাবতলি","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+JSON: {"intentType":"route","busName":null,"origin":"শনিরআখরা","destination":"গাবতলি","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 `.trim();
 
 function buildIntentExtractionPrompt(userMessage) {
@@ -144,7 +155,8 @@ ${validationError}
 
 Return only one valid JSON object with this shape:
 {
-  "intentType": "route" or "conversation",
+  "intentType": "route" or "conversation" or "bus_route",
+  "busName": string or null,
   "origin": string or null,
   "destination": string or null,
   "modes": array of "bus" | "cng" | "pathao" | "uber",
