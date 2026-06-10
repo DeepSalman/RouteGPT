@@ -8,16 +8,24 @@ CREATE TABLE IF NOT EXISTS buses (
   name_bn TEXT,
   slug TEXT,
   source_url TEXT,
+  description TEXT,
   seating_type TEXT,
   fare_range TEXT,
   operator TEXT,
   start_time TEXT,
   end_time TEXT,
   ticketing_system TEXT,
+  last_updated TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT buses_name_not_blank CHECK (btrim(name) <> '')
 );
+
+ALTER TABLE buses
+  ADD COLUMN IF NOT EXISTS description TEXT;
+
+ALTER TABLE buses
+  ADD COLUMN IF NOT EXISTS last_updated TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS buses_slug_unique_idx
   ON buses (slug)
@@ -58,6 +66,32 @@ CREATE INDEX IF NOT EXISTS bus_stops_stop_name_trgm_idx
 CREATE INDEX IF NOT EXISTS bus_stops_stop_name_bn_trgm_idx
   ON bus_stops USING GIN (stop_name_bn gin_trgm_ops)
   WHERE stop_name_bn IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS bus_counters (
+  id BIGSERIAL PRIMARY KEY,
+  bus_id BIGINT NOT NULL REFERENCES buses(id) ON DELETE CASCADE,
+  counter_name TEXT NOT NULL,
+  counter_name_bn TEXT,
+  raw_name TEXT,
+  counter_order INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT bus_counters_counter_name_not_blank CHECK (btrim(counter_name) <> ''),
+  CONSTRAINT bus_counters_counter_order_positive CHECK (counter_order > 0),
+  CONSTRAINT bus_counters_bus_order_unique UNIQUE (bus_id, counter_order)
+);
+
+CREATE INDEX IF NOT EXISTS bus_counters_bus_id_idx
+  ON bus_counters (bus_id);
+
+CREATE INDEX IF NOT EXISTS bus_counters_counter_name_lower_idx
+  ON bus_counters (lower(counter_name));
+
+CREATE INDEX IF NOT EXISTS bus_counters_counter_name_trgm_idx
+  ON bus_counters USING GIN (counter_name gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS bus_counters_counter_name_bn_trgm_idx
+  ON bus_counters USING GIN (counter_name_bn gin_trgm_ops)
+  WHERE counter_name_bn IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS landmarks (
   id BIGSERIAL PRIMARY KEY,

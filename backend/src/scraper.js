@@ -116,7 +116,7 @@ function splitEnglishBangla(rawValue) {
 
 function parseStopsFromRouteText(routeText) {
   return normalizeText(routeText)
-    .split("⇄")
+    .split(/⇄|â‡„/)
     .map((part) => normalizeText(part))
     .filter(Boolean)
     .map((rawStop, index) => {
@@ -152,14 +152,44 @@ function parseHoursFromText(text) {
 
 function parseSeatingTypeFromText(text) {
   const normalized = normalizeText(text);
-  const match = normalized.match(/Seating Service Type\s*:?\s*([^<\n\r]+?)(?:More Details|Ticketing System|$)/i);
-  return match ? normalizeText(match[1]) : null;
+  const match = normalized.match(
+    /Seating Service Type\s*:?\s*(.+?)(?:More Details|Ticketing System|Bus Counter|Routes Google Map|Frequently Asked Questions|Last updated|$)/i
+  );
+
+  if (!match) return null;
+
+  return normalizeText(match[1]).replace(/^.*?Seating Service Type\s*:?\s*/i, "");
 }
 
 function parseFareRangeFromText(text) {
   const normalized = normalizeText(text);
   const match = normalized.match(/(?:Fare|ভাড়া|ভাড়া)\s*:?\s*([৳TkBDT0-9\s\-–.]+)/i);
   return match ? normalizeText(match[1]) : null;
+}
+
+function parseLastUpdatedFromText(text) {
+  const normalized = normalizeText(text);
+  const match = normalized.match(
+    /Last updated\s*:?\s*(.*?)(?:&copy;|©|All rights|Facebook|$)/i
+  );
+  return match ? normalizeText(match[1]) : null;
+}
+
+function parseDescriptionWithCheerio($) {
+  const h1 = $("h1").first();
+  const paragraphs = [];
+
+  h1.nextUntil("h2").each((_index, element) => {
+    const tagName = element.tagName || element.name;
+    if (tagName?.toLowerCase() !== "p") return;
+
+    const text = normalizeText($(element).text());
+    if (text && !/youtube\.com/i.test(text)) {
+      paragraphs.push(text);
+    }
+  });
+
+  return paragraphs.join("\n\n") || null;
 }
 
 function parseTicketingSystemWithCheerio($, root) {
@@ -171,6 +201,40 @@ function parseTicketingSystemWithCheerio($, root) {
   if (!heading.length) return null;
 
   return normalizeText(heading.nextAll("p").first().text()) || null;
+}
+
+function parseStopsFromTableRows($, table) {
+  const stops = [];
+
+  table.find("tr").each((_index, row) => {
+    const cells = $(row).find("td");
+    if (cells.length < 2) return;
+
+    const order = Number(normalizeText($(cells[0]).text()));
+    const rawStop = normalizeText($(cells[1]).text());
+    if (!Number.isFinite(order) || !rawStop) return;
+
+    const parsed = splitEnglishBangla(rawStop);
+    stops.push({
+      order,
+      name: parsed.name,
+      nameBn: parsed.nameBn,
+      raw: parsed.raw
+    });
+  });
+
+  return stops;
+}
+
+function parseCounterStopsWithCheerio($, root) {
+  const heading = $(root)
+    .find("h2")
+    .filter((_index, element) => /Bus Counter|Counter\/Stoppage/i.test($(element).text()))
+    .first();
+
+  if (!heading.length) return [];
+
+  return parseStopsFromTableRows($, heading.nextAll("table").first());
 }
 
 async function loadCheerio() {
@@ -268,24 +332,7 @@ function parseDetailPageWithCheerio(cheerio, html, sourceUrl) {
     .filter((_index, element) => /Routes/i.test($(element).text()))
     .first();
   const routeTable = routeHeading.nextAll("table").first();
-  const stops = [];
-
-  routeTable.find("tr").each((_index, row) => {
-    const cells = $(row).find("td");
-    if (cells.length < 2) return;
-
-    const order = Number(normalizeText($(cells[0]).text()));
-    const rawStop = normalizeText($(cells[1]).text());
-    if (!Number.isFinite(order) || !rawStop) return;
-
-    const parsed = splitEnglishBangla(rawStop);
-    stops.push({
-      order,
-      name: parsed.name,
-      nameBn: parsed.nameBn,
-      raw: parsed.raw
-    });
-  });
+  const stops = parseStopsFromTableRows($, routeTable);
 
   const pageText = normalizeText($("body").text());
 
@@ -293,23 +340,56 @@ function parseDetailPageWithCheerio(cheerio, html, sourceUrl) {
     ...parseName(h1),
     sourceUrl,
     slug: slugFromUrl(sourceUrl),
+    description: parseDescriptionWithCheerio($),
     stops,
+    counterStops: parseCounterStopsWithCheerio($, "body"),
     operatingHours: parseHoursFromText(pageText),
     seatingType: parseSeatingTypeFromText(pageText),
     fareRange: parseFareRangeFromText(pageText),
-    ticketingSystem: parseTicketingSystemWithCheerio($, "body")
+    ticketingSystem: parseTicketingSystemWithCheerio($, "body"),
+    lastUpdated: parseLastUpdatedFromText(pageText)
   });
 }
 
-function parseDetailPageFallback(html, sourceUrl) {
-  const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  const routeTableStart = html.search(/<h2[^>]*>[\s\S]*?Routes[\s\S]*?<\/h2>/i);
-  const tableHtml =
-    routeTableStart >= 0
-      ? html.slice(routeTableStart).match(/<table[\s\S]*?<\/table>/i)?.[0] || ""
-      : "";
+function extractSectionHtml(html, headingPattern) {
+  const headingRegex = /<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>/gi;
+  let match;
+
+  while ((match = headingRegex.exec(html)) !== null) {
+    if (!headingPattern.test(stripTags(match[0]))) continue;
+
+    const start = headingRegex.lastIndex;
+    const rest = html.slice(start);
+    const nextHeading = rest.search(/<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>/i);
+    return nextHeading >= 0 ? rest.slice(0, nextHeading) : rest;
+  }
+
+  return "";
+}
+
+function parseFirstParagraphFromHtml(html) {
+  const paragraphMatch = html.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  const text = paragraphMatch ? stripTags(paragraphMatch[1]) : stripTags(html);
+  return text || null;
+}
+
+function parseDescriptionFallback(html) {
+  const h1Match = html.match(/<h1[^>]*>[\s\S]*?<\/h1>/i);
+  if (!h1Match) return null;
+
+  const afterH1 = html.slice((h1Match.index || 0) + h1Match[0].length);
+  const beforeH2 = afterH1.split(/<h2[^>]*>/i)[0] || "";
+  const paragraphs = [...beforeH2.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map((match) => stripTags(match[1]))
+    .filter((text) => text && !/youtube\.com/i.test(text));
+
+  return paragraphs.join("\n\n") || null;
+}
+
+function parseStopsFromTableHtml(tableHtml) {
   const stops = [];
-  const rowRegex = /<tr>\s*<td>(\d+)<\/td>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/gi;
+  const rowRegex =
+    /<tr>\s*<td[^>]*>(\d+)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi;
   let match;
 
   while ((match = rowRegex.exec(tableHtml)) !== null) {
@@ -324,17 +404,33 @@ function parseDetailPageFallback(html, sourceUrl) {
     });
   }
 
+  return stops;
+}
+
+function parseDetailPageFallback(html, sourceUrl) {
+  const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const routeSectionHtml = extractSectionHtml(html, /Routes/i);
+  const routeTableHtml = routeSectionHtml.match(/<table[\s\S]*?<\/table>/i)?.[0] || "";
+  const counterSectionHtml = extractSectionHtml(html, /Bus Counter|Counter\/Stoppage/i);
+  const counterTableHtml = counterSectionHtml.match(/<table[\s\S]*?<\/table>/i)?.[0] || "";
+  const ticketingSectionHtml = extractSectionHtml(html, /Ticketing System/i);
+  const stops = parseStopsFromTableHtml(routeTableHtml);
+  const counterStops = parseStopsFromTableHtml(counterTableHtml);
+
   const pageText = stripTags(html);
 
   return normalizeBusRecord({
     ...parseName(titleMatch ? stripTags(titleMatch[1]) : ""),
     sourceUrl,
     slug: slugFromUrl(sourceUrl),
+    description: parseDescriptionFallback(html),
     stops,
+    counterStops,
     operatingHours: parseHoursFromText(pageText),
     seatingType: parseSeatingTypeFromText(pageText),
     fareRange: parseFareRangeFromText(pageText),
-    ticketingSystem: null
+    ticketingSystem: parseFirstParagraphFromHtml(ticketingSectionHtml),
+    lastUpdated: parseLastUpdatedFromText(pageText)
   });
 }
 
@@ -344,6 +440,7 @@ function normalizeBusRecord(bus) {
     nameBn: bus.nameBn || null,
     slug: bus.slug || null,
     sourceUrl: bus.sourceUrl || null,
+    description: bus.description || null,
     seatingType: bus.seatingType || null,
     fareRange: bus.fareRange || null,
     operatingHours: {
@@ -351,7 +448,17 @@ function normalizeBusRecord(bus) {
       end: bus.operatingHours?.end || null
     },
     ticketingSystem: bus.ticketingSystem || null,
+    lastUpdated: bus.lastUpdated || null,
     stops: bus.stops
+      .filter((stop) => stop.name)
+      .sort((a, b) => a.order - b.order)
+      .map((stop, index) => ({
+        order: index + 1,
+        name: stop.name,
+        nameBn: stop.nameBn || null,
+        raw: stop.raw
+      })),
+    counterStops: (bus.counterStops || [])
       .filter((stop) => stop.name)
       .sort((a, b) => a.order - b.order)
       .map((stop, index) => ({
@@ -373,14 +480,17 @@ function mergeBusRecords(base, detail) {
     nameBn: base.nameBn || detail.nameBn,
     sourceUrl: base.sourceUrl || detail.sourceUrl,
     slug: base.slug || detail.slug,
+    description: detail.description || base.description,
     stops: detail.stops.length >= base.stops.length ? detail.stops : base.stops,
+    counterStops: detail.counterStops.length ? detail.counterStops : base.counterStops || [],
     operatingHours: {
       start: detail.operatingHours.start || base.operatingHours.start,
       end: detail.operatingHours.end || base.operatingHours.end
     },
     seatingType: detail.seatingType || base.seatingType,
     fareRange: detail.fareRange || base.fareRange,
-    ticketingSystem: detail.ticketingSystem || base.ticketingSystem
+    ticketingSystem: detail.ticketingSystem || base.ticketingSystem,
+    lastUpdated: detail.lastUpdated || base.lastUpdated
   });
 }
 
