@@ -206,6 +206,7 @@ RouteGPT/
 | `backend/src/distance.js` | Google distance service plus approximate fallback. |
 | `backend/src/llm/intentExtraction.js` | Intent extraction, local guards, fallback parser, JSON normalization. |
 | `backend/src/llm/intentPrompt.js` | Strict JSON prompt/schema for LLM intent extraction. |
+| `backend/src/llm/conversationReply.js` | LLM-written conversational replies (identity, small talk, general questions) with persona guardrails. |
 | `backend/src/llm/geminiClient.js` | Gemini provider client. |
 | `backend/src/llm/groqClient.js` | Groq fallback provider client. |
 | `backend/src/db/routeRepository.js` | PostgreSQL fuzzy route lookup and named bus route lookup. |
@@ -294,16 +295,18 @@ Fallback LLM:
 
 Important guardrails:
 
-- LLM extracts intent only.
+- LLM extracts intent and writes conversational replies; deterministic code does everything else.
+- Conversational messages (greetings, identity questions like "what is your name", small talk, general questions) get a natural LLM-written reply from `backend/src/llm/conversationReply.js`, with a canned fallback when no provider is configured or the call fails.
 - LLM does not invent bus routes.
 - LLM does not invent fare rules.
+- The conversation persona prompt forbids stating bus names, routes, stops, fares, or schedules from memory.
 - Backend/database are source of truth.
 - Invalid JSON triggers retry/fallback.
 - Missing or ambiguous locations trigger clarification.
 
 Local non-LLM guards already handle:
 
-- Greetings like `hello`.
+- Greetings like `hello` (classification only; the reply text is LLM-written when a provider is configured).
 - Basic help messages.
 - Simple route syntax such as `A to B` or `A theke B`.
 - Named bus route requests such as `Raida bus er route bolo`.
@@ -345,7 +348,7 @@ npm run db:seed
 
 Current local note:
 
-- `npm test` passed with 41 backend tests on 2026-06-10.
+- `npm test` runs the backend suite and the frontend demo-brain suite (51 + 10 tests, all passing on 2026-06-10).
 - A local frontend build may fail if `vite` is not installed locally. Do not solve that by blindly running `npm install` unless the project owner approves it.
 
 ## 12. GitHub Pages Notes
@@ -367,6 +370,7 @@ backend/data/bus_data.json
 ## 13. Current Known Limitations
 
 - GitHub Pages demo is static; it cannot query PostgreSQL.
+- GitHub Pages demo conversation replies are templated; free-form LLM replies only happen in backend mode.
 - Real Pathao/Uber fares are not fetched live.
 - Google Maps distance requires API configuration in backend mode.
 - Stop aliases need continuous improvement.

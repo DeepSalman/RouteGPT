@@ -16,7 +16,7 @@
     "db:seed": "npm --workspace backend run db:seed --",
     "build": "npm run build --workspace frontend",
     "start": "npm run start --workspace backend",
-    "test": "npm --workspace backend test",
+    "test": "npm --workspace backend test && npm --workspace frontend test",
     "install:all": "npm install"
   },
   "devDependencies": {

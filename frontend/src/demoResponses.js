@@ -131,6 +131,93 @@ function isGreetingMessage(normalized) {
   ].includes(normalized.replace(/[^a-z0-9\s]/g, "").trim());
 }
 
+const DEMO_EXAMPLES_HINT =
+  'Try "Gabtoli to Mirpur 1", "Raida bus er route bolo", or "Gulshan to Dhanmondi CNG".';
+
+const DEMO_GENERAL_CHAT_REPLY =
+  "Good question! This live demo runs on static route data without a live AI model, so I keep general chat short — the full RouteGPT answers freely. What I'm great at here is Dhaka transport. " +
+  DEMO_EXAMPLES_HINT;
+
+function getDemoConversationReply(normalized) {
+  const compact = normalized
+    .replace(/[^a-z0-9ঀ-৿\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (isGreetingMessage(normalized)) {
+    return (
+      "Hello! I'm RouteGPT, your Dhaka transport assistant. Tell me where you're starting and " +
+      'where you want to go — for example "Gabtoli to Mirpur 1" — and I\'ll check bus routes ' +
+      "plus CNG, Pathao, and Uber estimates."
+    );
+  }
+
+  if (
+    /(?:\byour name\b|\btomar (?:naam|nam)\b|\btumi ke\b|\bke tumi\b|\bapni ke\b|\bwho are you\b|\bwhat are you\b|\bintroduce yourself\b)/.test(
+      compact
+    ) ||
+    /তোমার নাম|তুমি কে|আপনি কে/.test(normalized)
+  ) {
+    return (
+      "I'm RouteGPT — a Dhaka transport assistant. I find bus routes from local route data, " +
+      "calculate bus and student fares, and estimate CNG, Pathao, and Uber costs. " +
+      "Tell me where you're starting and where you want to go!"
+    );
+  }
+
+  if (
+    /\bwho (?:made|built|created) you\b|\bke (?:baniyeche|banaise|banalo)\b/.test(compact) ||
+    /কে বানিয়েছে|কে তৈরি করেছে/.test(normalized)
+  ) {
+    return (
+      "I was built as RouteGPT, an open project that turns Dhaka's informal transport knowledge " +
+      "into a structured assistant. Ask me a route and I'll show you how it works!"
+    );
+  }
+
+  if (
+    /\bhow are you\b|\bkemon (?:acho|achen|aso)\b/.test(compact) ||
+    /কেমন আছো|কেমন আছেন/.test(normalized)
+  ) {
+    return (
+      "I'm doing great, thanks for asking! Ready whenever you are — tell me your starting point " +
+      "and destination and I'll find the best way there."
+    );
+  }
+
+  if (
+    /\b(?:thank you|thanks|thank u|thx|dhonnobad|dhonnyobad)\b/.test(compact) ||
+    /ধন্যবাদ/.test(normalized)
+  ) {
+    return "You're welcome! Safe travels — and ask me anytime you need another Dhaka route.";
+  }
+
+  if (/^(?:help|what can you do|how does this work|ki korte paro)\??$/.test(normalized)) {
+    return `I can help with Dhaka route questions. ${DEMO_EXAMPLES_HINT}`;
+  }
+
+  return null;
+}
+
+function looksLikeGeneralChat(normalized) {
+  const hasRouteSignal =
+    /\b(?:to|from|theke|bus|cng|pathao|uber|route|fare|vara|bhara|jabo|jete|koto|stop|stand|station)\b|থেকে|হতে|টু|বাস|সিএনজি|পাঠাও|উবার|রুট|ভাড়া|যাব|যাবো|কত/.test(
+      normalized
+    );
+
+  if (hasRouteSignal) {
+    return false;
+  }
+
+  return (
+    normalized.includes("?") ||
+    /^(?:what|who|why|when|where|which|how|can|could|will|would|do|does|did|are|is|am|tell|say|sing|write|explain|define|describe|give|make|create)\b/.test(
+      normalized
+    ) ||
+    /কি|কী|কে|কেন|কিভাবে|কীভাবে/.test(normalized)
+  );
+}
+
 function cleanPlaceName(value) {
   const cleaned = String(value || "")
     .replace(/^(?:how\s+(?:do|can)\s+i\s+(?:go|get)|how\s+to\s+(?:go|get)|route|student\s+fare\s+koto|fare\s+koto|from|ami|i|আমি|আমার|আমাকে|কিভাবে|কীভাবে)\s+/i, "")
@@ -775,7 +862,10 @@ function createNoRouteResponse(message) {
   };
 }
 
-function createConversationResponse(message) {
+function createConversationResponse(
+  message,
+  reply = "Hello! Tell me your starting point and destination in Dhaka, and I can check bus routes plus CNG, Pathao, and Uber estimates."
+) {
   return {
     ok: true,
     type: "conversation",
@@ -787,8 +877,7 @@ function createConversationResponse(message) {
       modes: [],
       needsClarification: false
     },
-    reply:
-      "Hello! Tell me your starting point and destination in Dhaka, and I can check bus routes plus CNG, Pathao, and Uber estimates.",
+    reply,
     cards: [],
     results: {
       buses: [],
@@ -829,9 +918,11 @@ export async function getDemoChatResponse(message) {
 
   const normalized = normalizeMessage(message);
   const busRouteQuery = parseBusRouteQuery(message);
+  const conversationReply =
+    busRouteQuery || parseRouteFromMessage(message) ? null : getDemoConversationReply(normalized);
 
-  if (isGreetingMessage(normalized)) {
-    return createConversationResponse(message);
+  if (conversationReply) {
+    return createConversationResponse(message, conversationReply);
   }
 
   if (busRouteQuery) {
@@ -868,6 +959,10 @@ export async function getDemoChatResponse(message) {
       : null);
 
   if (!route || normalized.includes("mars")) {
+    if (!normalized.includes("mars") && looksLikeGeneralChat(normalized)) {
+      return createConversationResponse(message, DEMO_GENERAL_CHAT_REPLY);
+    }
+
     return createNoRouteResponse(message);
   }
 

@@ -541,6 +541,7 @@ async function extractIntent(
 export {
   CONVERSATION_REPLIES,
   IntentExtractionError,
+  createConfiguredIntentClients as createConfiguredLlmClients,
   extractIntent,
   extractJsonObjectText,
   parseLocalRouteIntent,

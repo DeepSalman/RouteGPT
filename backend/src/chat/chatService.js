@@ -3,6 +3,7 @@ import {
   calculateCngFare,
   estimateAllRideFares
 } from "../fares.js";
+import { generateConversationReply } from "../llm/conversationReply.js";
 import { extractIntent } from "../llm/intentExtraction.js";
 import { formatChatReply } from "./responseFormatter.js";
 
@@ -160,10 +161,34 @@ async function maybeGetDistance({ intent, modes, distanceService }) {
   }
 }
 
+async function generateLlmConversationReply(conversationResponder, message, intent) {
+  if (!conversationResponder) {
+    return null;
+  }
+
+  try {
+    const generated = await conversationResponder(message, { intent });
+    const reply = typeof generated === "string" ? generated : generated?.reply;
+
+    if (typeof reply !== "string" || !reply.trim()) {
+      return null;
+    }
+
+    return {
+      reply: reply.trim(),
+      provider: (typeof generated === "object" && generated?.provider) || null,
+      model: (typeof generated === "object" && generated?.model) || null
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function handleChatMessage(
   message,
   {
     intentExtractor = extractIntent,
+    conversationResponder = generateConversationReply,
     routeRepository,
     distanceService,
     isNightFare = false,
@@ -174,18 +199,25 @@ async function handleChatMessage(
   const intent = await intentExtractor(normalizedMessage, { includeMeta: true });
 
   if (intent.intentType === "conversation") {
+    const llmReply = await generateLlmConversationReply(
+      conversationResponder,
+      normalizedMessage,
+      intent
+    );
+    const fallbackReply = formatChatReply({
+      intent,
+      busCards: [],
+      cngCard: null,
+      rideCards: [],
+      distance: null
+    });
+
     return {
       ok: true,
       type: "conversation",
       message: normalizedMessage,
       intent,
-      reply: formatChatReply({
-        intent,
-        busCards: [],
-        cngCard: null,
-        rideCards: [],
-        distance: null
-      }),
+      reply: llmReply ? llmReply.reply : fallbackReply,
       cards: [],
       results: {
         buses: [],
@@ -193,7 +225,10 @@ async function handleChatMessage(
         rideHailing: []
       },
       meta: {
-        inventedRoutes: false
+        inventedRoutes: false,
+        conversationReplySource: llmReply ? "llm" : "fallback",
+        conversationProvider: llmReply ? llmReply.provider : null,
+        conversationModel: llmReply ? llmReply.model : null
       }
     };
   }

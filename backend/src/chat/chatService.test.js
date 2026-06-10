@@ -112,30 +112,100 @@ test("answers bus-only route query from database results", async () => {
   assert.match(result.reply, /Achim Paribahan/);
 });
 
+const conversationIntent = Object.freeze({
+  intentType: "conversation",
+  origin: null,
+  destination: null,
+  modes: [],
+  studentFare: false,
+  needsClarification: false,
+  clarificationQuestion: null,
+  conversationReply: "Hello! Tell me where you want to go."
+});
+
 test("greets instead of treating hello as a route query", async () => {
   const routeRepository = createRouteRepository();
   const distanceService = createDistanceService();
 
   const result = await handleChatMessage("hello", {
-    intentExtractor: createIntentExtractor({
-      intentType: "conversation",
-      origin: null,
-      destination: null,
-      modes: [],
-      studentFare: false,
-      needsClarification: false,
-      clarificationQuestion: null,
-      conversationReply: "Hello! Tell me where you want to go."
-    }),
+    intentExtractor: createIntentExtractor(conversationIntent),
+    conversationResponder: null,
     routeRepository,
     distanceService
   });
 
   assert.equal(result.type, "conversation");
   assert.match(result.reply, /Hello/);
+  assert.equal(result.meta.conversationReplySource, "fallback");
   assert.equal(result.cards.length, 0);
   assert.equal(routeRepository.calls.length, 0);
   assert.equal(distanceService.calls.length, 0);
+});
+
+test("answers identity questions through the LLM conversation responder", async () => {
+  const routeRepository = createRouteRepository();
+  const distanceService = createDistanceService();
+  const responderCalls = [];
+
+  const result = await handleChatMessage("what is your name?", {
+    intentExtractor: createIntentExtractor(conversationIntent),
+    conversationResponder: async (message, { intent }) => {
+      responderCalls.push({ message, intent });
+      return {
+        reply: "I'm RouteGPT, your Dhaka transport assistant.",
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        fallbackUsed: false
+      };
+    },
+    routeRepository,
+    distanceService
+  });
+
+  assert.equal(result.type, "conversation");
+  assert.equal(result.reply, "I'm RouteGPT, your Dhaka transport assistant.");
+  assert.equal(result.meta.conversationReplySource, "llm");
+  assert.equal(result.meta.conversationProvider, "gemini");
+  assert.equal(result.meta.conversationModel, "gemini-2.5-flash");
+  assert.equal(responderCalls.length, 1);
+  assert.equal(responderCalls[0].message, "what is your name?");
+  assert.equal(responderCalls[0].intent.intentType, "conversation");
+  assert.equal(result.cards.length, 0);
+  assert.equal(routeRepository.calls.length, 0);
+  assert.equal(distanceService.calls.length, 0);
+});
+
+test("accepts a plain-string conversation responder reply", async () => {
+  const result = await handleChatMessage("kemon acho?", {
+    intentExtractor: createIntentExtractor(conversationIntent),
+    conversationResponder: async () => "Bhalo achi! Apni kothay jaben bolen, ami route dekhe dei.",
+    routeRepository: createRouteRepository(),
+    distanceService: createDistanceService()
+  });
+
+  assert.equal(result.type, "conversation");
+  assert.equal(result.reply, "Bhalo achi! Apni kothay jaben bolen, ami route dekhe dei.");
+  assert.equal(result.meta.conversationReplySource, "llm");
+  assert.equal(result.meta.conversationProvider, null);
+});
+
+test("falls back to the canned reply when the conversation responder fails", async () => {
+  const routeRepository = createRouteRepository();
+  const distanceService = createDistanceService();
+
+  const result = await handleChatMessage("hello", {
+    intentExtractor: createIntentExtractor(conversationIntent),
+    conversationResponder: async () => {
+      throw new Error("LLM unavailable");
+    },
+    routeRepository,
+    distanceService
+  });
+
+  assert.equal(result.type, "conversation");
+  assert.equal(result.reply, "Hello! Tell me where you want to go.");
+  assert.equal(result.meta.conversationReplySource, "fallback");
+  assert.equal(result.cards.length, 0);
 });
 
 test("answers a named bus route request with full ordered stops", async () => {
