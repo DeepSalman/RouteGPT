@@ -1,12 +1,19 @@
 import {
+  ArrowRight,
+  Bike,
   Bookmark,
+  Bus,
+  CarFront,
   Check,
   Clock3,
   Flag,
   Loader2,
+  MapPin,
   Plus,
+  Route,
   SendHorizontal,
   Settings,
+  Sparkles,
   UserCircle,
   X
 } from "lucide-react";
@@ -17,9 +24,30 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000
 const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
 const examplePrompts = [
-  "Gabtoli to Mirpur 1",
-  "Bashundhara theke Jatrabari bus",
-  "Gulshan to Dhanmondi CNG"
+  {
+    text: "Gabtoli to Mirpur 1",
+    hint: "Find a direct bus",
+    icon: Bus,
+    mode: "bus"
+  },
+  {
+    text: "Raida bus er route bolo",
+    hint: "See a full bus route",
+    icon: Route,
+    mode: "route"
+  },
+  {
+    text: "Gulshan to Dhanmondi CNG",
+    hint: "CNG fare estimate",
+    icon: CarFront,
+    mode: "cng"
+  },
+  {
+    text: "Bashundhara theke Jatrabari bus",
+    hint: "Banglish works too",
+    icon: Sparkles,
+    mode: "banglish"
+  }
 ];
 
 const loadingMessages = [
@@ -138,11 +166,20 @@ function getReportKey(card, index) {
     .join(":");
 }
 
+function getCardMode(card) {
+  if (card.type === "bus") return "bus";
+  if (card.type === "bus_route") return "route";
+  if (card.type === "cng") return "cng";
+  return card.provider === "uber" ? "uber" : "pathao";
+}
+
 function Sidebar({ onNewChat }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <div className="brand-mark">R</div>
+        <div className="brand-mark" aria-hidden="true">
+          <Bus size={18} />
+        </div>
         <div>
           <strong>RouteGPT</strong>
           <span>Dhaka transport</span>
@@ -151,22 +188,27 @@ function Sidebar({ onNewChat }) {
 
       <nav className="sidebar-nav" aria-label="Main">
         <button className="nav-item nav-item-active" type="button" onClick={onNewChat}>
-          <Plus size={22} />
+          <Plus size={20} />
           <span>New Chat</span>
         </button>
         <button className="nav-item" type="button">
-          <Clock3 size={22} />
+          <Clock3 size={20} />
           <span>History</span>
         </button>
         <button className="nav-item" type="button">
-          <Bookmark size={22} />
+          <Bookmark size={20} />
           <span>Saved Routes</span>
         </button>
       </nav>
 
+      <div className="sidebar-tip">
+        <strong>Tip</strong>
+        <span>Banglish works — try “Gabtoli theke Mirpur 1 bus e jabo”.</span>
+      </div>
+
       <div className="sidebar-footer">
         <button className="nav-item" type="button">
-          <Settings size={22} />
+          <Settings size={20} />
           <span>Settings</span>
         </button>
         <div className="user-row">
@@ -185,36 +227,84 @@ function Header({ onAccountClick }) {
   return (
     <header className="topbar">
       <div className="topbar-title">
-        <strong>RouteGPT</strong>
+        <span className="topbar-mark" aria-hidden="true">
+          <Bus size={15} />
+        </span>
+        <div>
+          <strong>RouteGPT</strong>
+          <span className="topbar-sub">Dhaka transport assistant</span>
+        </div>
       </div>
-      <button
-        className="icon-button"
-        type="button"
-        aria-label="Open account information"
-        onClick={onAccountClick}
-      >
-        <UserCircle size={26} />
-      </button>
+      <div className="topbar-actions">
+        {IS_DEMO_MODE && <span className="demo-pill">Demo data</span>}
+        <button
+          className="icon-button"
+          type="button"
+          aria-label="Open account information"
+          onClick={onAccountClick}
+        >
+          <UserCircle size={24} />
+        </button>
+      </div>
     </header>
+  );
+}
+
+function RouteMotif() {
+  return (
+    <div className="route-motif" aria-hidden="true">
+      <span className="motif-dot" />
+      <span className="motif-line" />
+      <span className="motif-chip">
+        <Bus size={15} />
+      </span>
+      <span className="motif-line" />
+      <span className="motif-pin">
+        <MapPin size={15} />
+      </span>
+    </div>
   );
 }
 
 function EmptyState({ onPromptClick }) {
   return (
     <section className="empty-state" aria-label="Example route prompts">
-      <h1>Where do you want to go?</h1>
+      <div className="hero">
+        <span className="hero-eyebrow">
+          <Sparkles size={13} />
+          Dhaka transport assistant
+        </span>
+        <h1>Where do you want to go?</h1>
+        <p className="hero-sub">
+          Ask in Bangla, Banglish, or English — direct buses, fares, CNG and ride estimates
+          from local route data.
+        </p>
+        <RouteMotif />
+      </div>
+
       <div className="prompt-grid">
-        {examplePrompts.map((prompt) => (
-          <button
-            className="prompt-card"
-            type="button"
-            key={prompt}
-            onClick={() => onPromptClick(prompt)}
-          >
-            <span>{prompt}</span>
-            <span aria-hidden="true">-&gt;</span>
-          </button>
-        ))}
+        {examplePrompts.map((prompt) => {
+          const Icon = prompt.icon;
+
+          return (
+            <button
+              className="prompt-card"
+              data-mode={prompt.mode}
+              type="button"
+              key={prompt.text}
+              onClick={() => onPromptClick(prompt.text)}
+            >
+              <span className="prompt-icon" aria-hidden="true">
+                <Icon size={17} />
+              </span>
+              <span className="prompt-text">
+                <strong>{prompt.text}</strong>
+                <span>{prompt.hint}</span>
+              </span>
+              <ArrowRight className="prompt-arrow" size={15} aria-hidden="true" />
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -239,6 +329,30 @@ function ReportButton({ reportKey }) {
   );
 }
 
+function CardHeader({ mode, chip, title, icon: Icon }) {
+  return (
+    <header className="result-card-header">
+      <span className="card-icon" aria-hidden="true">
+        <Icon size={16} />
+      </span>
+      <div className="card-heading">
+        <span className="result-mode">{chip}</span>
+        <strong>{title}</strong>
+      </div>
+    </header>
+  );
+}
+
+function RouteEnds({ origin, destination }) {
+  return (
+    <p className="route-summary">
+      <span>{origin}</span>
+      <ArrowRight className="route-arrow" size={14} aria-hidden="true" />
+      <span>{destination}</span>
+    </p>
+  );
+}
+
 function BusResultCard({ card, index }) {
   const currency = card.fare?.currency || "BDT";
   const origin = card.route?.originStopName || "Origin";
@@ -246,16 +360,13 @@ function BusResultCard({ card, index }) {
   const stationCount = card.route?.stationCount;
 
   return (
-    <article className="result-card result-card-bus">
-      <header className="result-card-header">
-        <span className="result-mode">Bus</span>
-        <strong>{card.title || "Bus option"}</strong>
-      </header>
+    <article className="result-card result-card-bus" data-mode="bus">
+      <CardHeader mode="bus" chip="Bus" title={card.title || "Bus option"} icon={Bus} />
 
       <dl className="fare-grid">
         <div>
           <dt>Fare</dt>
-          <dd>{formatMoney(card.fare?.general, currency)}</dd>
+          <dd className="fare-main">{formatMoney(card.fare?.general, currency)}</dd>
         </div>
         <div>
           <dt>Student</dt>
@@ -263,9 +374,7 @@ function BusResultCard({ card, index }) {
         </div>
       </dl>
 
-      <p className="route-summary">
-        {origin} -&gt; {destination}
-      </p>
+      <RouteEnds origin={origin} destination={destination} />
 
       <div className="result-meta">
         {typeof stationCount === "number" && <span>{stationCount} stops</span>}
@@ -282,11 +391,8 @@ function BusRouteDetailCard({ card, index }) {
   const hourParts = [card.operatingHours?.start, card.operatingHours?.end].filter(Boolean);
 
   return (
-    <article className="result-card result-card-route">
-      <header className="result-card-header">
-        <span className="result-mode">Full route</span>
-        <strong>{card.title || "Bus route"}</strong>
-      </header>
+    <article className="result-card result-card-route" data-mode="route">
+      <CardHeader mode="route" chip="Full route" title={card.title || "Bus route"} icon={Route} />
 
       <div className="result-meta">
         {typeof card.totalStops === "number" && <span>{card.totalStops} stops</span>}
@@ -297,8 +403,12 @@ function BusRouteDetailCard({ card, index }) {
       {stops.length > 0 && (
         <ol className="route-stop-list" aria-label={`${card.title} stops`}>
           {stops.map((stop, stopIndex) => (
-            <li key={`${stop.order || stopIndex}-${stop.name || stop.raw}`}>
-              <span>{stop.name || stop.raw}</span>
+            <li
+              key={`${stop.order || stopIndex}-${stop.name || stop.raw}`}
+              className={stopIndex === stops.length - 1 ? "stop-last" : undefined}
+            >
+              <span className="stop-marker" aria-hidden="true" />
+              <span className="stop-name">{stop.name || stop.raw}</span>
             </li>
           ))}
         </ol>
@@ -313,13 +423,11 @@ function CngResultCard({ card, index }) {
   const distance = formatDistance(card);
 
   return (
-    <article className="result-card">
-      <header className="result-card-header">
-        <span className="result-mode">CNG</span>
-        <strong>{formatMoney(card.fare?.amount, card.fare?.currency || "BDT")}</strong>
-      </header>
+    <article className="result-card" data-mode="cng">
+      <CardHeader mode="cng" chip="CNG" title={card.title || "CNG auto"} icon={CarFront} />
 
-      {distance && <p className="route-summary">{distance}</p>}
+      <p className="result-price">{formatMoney(card.fare?.amount, card.fare?.currency || "BDT")}</p>
+      {distance && <p className="result-distance">{distance}</p>}
       <p className="result-note">
         {card.fare?.isNight ? "Night fare estimate included." : "Distance-based estimate."}
       </p>
@@ -331,16 +439,20 @@ function CngResultCard({ card, index }) {
 
 function RideResultCard({ card, index }) {
   const distance = formatDistance(card);
+  const isUber = card.provider === "uber";
+  const RideIcon = /bike|moto/i.test(card.vehicle || "") ? Bike : CarFront;
 
   return (
-    <article className="result-card">
-      <header className="result-card-header">
-        <span className="result-mode">{card.provider === "uber" ? "Uber" : "Pathao"}</span>
-        <strong>{card.title || "Ride estimate"}</strong>
-      </header>
+    <article className="result-card" data-mode={isUber ? "uber" : "pathao"}>
+      <CardHeader
+        mode={isUber ? "uber" : "pathao"}
+        chip={isUber ? "Uber" : "Pathao"}
+        title={card.title || "Ride estimate"}
+        icon={RideIcon}
+      />
 
       <p className="result-price">{formatFareRange(card.fareRange, card.currency || "BDT")}</p>
-      {distance && <p className="route-summary">{distance}</p>}
+      {distance && <p className="result-distance">{distance}</p>}
       <p className="result-note">{card.note || "Actual app fare may vary."}</p>
 
       <ReportButton reportKey={getReportKey(card, index)} />
@@ -378,6 +490,14 @@ function ResultCards({ cards }) {
   );
 }
 
+function AssistantAvatar() {
+  return (
+    <span className="assistant-avatar" aria-hidden="true">
+      <Bus size={15} />
+    </span>
+  );
+}
+
 function ChatMessage({ message }) {
   const hasCards = Array.isArray(message.cards) && message.cards.length > 0;
   const toneClass = message.tone === "error" ? " message-error" : "";
@@ -386,6 +506,7 @@ function ChatMessage({ message }) {
     <article
       className={`message message-${message.role}${hasCards ? " message-with-cards" : ""}${toneClass}`}
     >
+      {message.role === "assistant" && <AssistantAvatar />}
       <div className="message-stack">
         {message.content && (
           <div className="message-bubble">
@@ -401,17 +522,20 @@ function ChatMessage({ message }) {
 function Composer({ value, disabled, onChange, onSubmit }) {
   return (
     <form className="composer" aria-busy={disabled} onSubmit={onSubmit}>
+      <span className="composer-icon" aria-hidden="true">
+        <MapPin size={17} />
+      </span>
       <div className="composer-field">
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
-          placeholder={disabled ? "Finding route options..." : "Ask a route..."}
+          placeholder={disabled ? "Finding route options..." : "Ask a route — “Gabtoli to Mirpur 1”"}
           aria-label="Ask a route"
         />
       </div>
       <button className="send-button" type="submit" disabled={disabled || !value.trim()}>
-        {disabled ? <Loader2 className="spin" size={22} /> : <SendHorizontal size={22} />}
+        {disabled ? <Loader2 className="spin" size={20} /> : <SendHorizontal size={20} />}
         <span className="sr-only">Send</span>
       </button>
     </form>
@@ -463,6 +587,7 @@ function AccountModal({ account, onClose }) {
 function LoadingMessage({ step }) {
   return (
     <article className="message message-assistant">
+      <AssistantAvatar />
       <div className="message-stack">
         <div className="message-bubble typing">
           <Loader2 className="spin" size={18} />
@@ -506,13 +631,7 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [isSending]);
 
-  async function submitMessage(event) {
-    event.preventDefault();
-
-    const content = draft.trim();
-    if (!content || isSending) return;
-
-    setDraft("");
+  async function deliverMessage(content) {
     setMessages((current) => [...current, createUserMessage(content)]);
     setIsSending(true);
 
@@ -532,13 +651,25 @@ export default function App() {
     }
   }
 
+  function submitMessage(event) {
+    event.preventDefault();
+
+    const content = draft.trim();
+    if (!content || isSending) return;
+
+    setDraft("");
+    deliverMessage(content);
+  }
+
   function startNewChat() {
     setMessages([]);
     setDraft("");
   }
 
-  function usePrompt(prompt) {
-    setDraft(prompt);
+  function handlePromptClick(prompt) {
+    if (isSending) return;
+    setDraft("");
+    deliverMessage(prompt);
   }
 
   return (
@@ -549,7 +680,7 @@ export default function App() {
 
         <main className="chat-area" ref={scrollRef}>
           {messages.length === 0 ? (
-            <EmptyState onPromptClick={usePrompt} />
+            <EmptyState onPromptClick={handlePromptClick} />
           ) : (
             <section className="message-list" aria-live="polite">
               {messages.map((message) => (
@@ -567,6 +698,9 @@ export default function App() {
             onChange={setDraft}
             onSubmit={submitMessage}
           />
+          <p className="composer-hint">
+            Fares are estimates from local route data — actual prices may vary.
+          </p>
         </footer>
       </div>
 
