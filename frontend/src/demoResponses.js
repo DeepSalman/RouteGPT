@@ -1,3 +1,5 @@
+import { STATIC_BUS_ROUTES } from "./data/staticBusRoutes.js";
+
 const DEMO_DELAY_MS = 650;
 const DEFAULT_DISTANCE = Object.freeze({
   distanceKm: 7.4,
@@ -182,6 +184,85 @@ function detectModes(normalized) {
   return modes.length ? modes : ["bus", "cng", "pathao", "uber"];
 }
 
+function normalizeLookupText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\b(dhaka|bangladesh)\b/g, " ")
+    .replace(/[^a-z0-9\s/-]/g, " ")
+    .replace(/[/-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildLookupTerms(place) {
+  const normalized = normalizeLookupText(place);
+  const aliases = {
+    "biman bandar": "airport",
+    "dhaka airport": "airport",
+    "hazrat shahjalal airport": "airport",
+    "shahjalal airport": "airport",
+    "mirpur one": "mirpur 1",
+    "mirpur ten": "mirpur 10",
+    "mirpur eleven": "mirpur 11",
+    "mirpur twelve": "mirpur 12"
+  };
+  const terms = [normalized, aliases[normalized]].filter(Boolean);
+  return [...new Set(terms)];
+}
+
+function stopMatches(stop, terms) {
+  const values = [stop.name, stop.nameBn, stop.raw].map(normalizeLookupText).filter(Boolean);
+
+  return terms.some((term) =>
+    values.some((value) => value === term || value.includes(term) || term.includes(value))
+  );
+}
+
+function findStaticBusRoutes(origin, destination, maxResults = 5) {
+  const originTerms = buildLookupTerms(origin);
+  const destinationTerms = buildLookupTerms(destination);
+  const matches = [];
+
+  if (!originTerms.length || !destinationTerms.length) return matches;
+
+  for (const bus of STATIC_BUS_ROUTES) {
+    const stops = bus.stops || [];
+    const originIndexes = stops
+      .map((stop, index) => (stopMatches(stop, originTerms) ? index : -1))
+      .filter((index) => index >= 0);
+
+    for (const originIndex of originIndexes) {
+      const destinationIndex = stops.findIndex(
+        (stop, index) => index > originIndex && stopMatches(stop, destinationTerms)
+      );
+
+      if (destinationIndex === -1) continue;
+
+      const originStop = stops[originIndex];
+      const destinationStop = stops[destinationIndex];
+
+      matches.push({
+        origin: originStop.name,
+        destination: destinationStop.name,
+        originStopName: originStop.name,
+        originStopOrder: originStop.order,
+        destinationStopName: destinationStop.name,
+        destinationStopOrder: destinationStop.order,
+        busName: bus.name,
+        slug: bus.slug,
+        seatingType: bus.seatingType,
+        operatingHours: bus.operatingHours || {},
+        stationCount: destinationIndex - originIndex + 1
+      });
+      break;
+    }
+  }
+
+  return matches
+    .sort((a, b) => a.stationCount - b.stationCount || a.busName.localeCompare(b.busName))
+    .slice(0, maxResults);
+}
+
 function findDemoRoute(normalized) {
   return DEMO_ROUTES.find((route) =>
     route.patterns.every((pattern) => normalized.includes(pattern))
@@ -260,30 +341,30 @@ function createBusCard(route, index = 0) {
   return {
     type: "bus",
     title: route.busName,
-    subtitle: "Demo route",
-    busId: `demo-bus-${index + 1}`,
+    subtitle: route.seatingType || "Bus route",
+    busId: route.slug || `demo-bus-${index + 1}`,
     fare: {
       currency: "BDT",
       general,
       student
     },
     route: {
-      originStopName: route.origin,
-      originStopOrder: 1,
-      destinationStopName: route.destination,
-      destinationStopOrder: route.stationCount,
+      originStopName: route.originStopName || route.origin,
+      originStopOrder: route.originStopOrder || 1,
+      destinationStopName: route.destinationStopName || route.destination,
+      destinationStopOrder: route.destinationStopOrder || route.stationCount,
       stationCount: route.stationCount
     },
     operatingHours: {
-      start: null,
-      end: null
+      start: route.operatingHours?.start || null,
+      end: route.operatingHours?.end || null
     },
     reportAction: {
       label: "Report wrong info",
       payload: {
-        busId: `demo-bus-${index + 1}`,
-        originStopName: route.origin,
-        destinationStopName: route.destination
+        busId: route.slug || `demo-bus-${index + 1}`,
+        originStopName: route.originStopName || route.origin,
+        destinationStopName: route.destinationStopName || route.destination
       }
     }
   };
@@ -375,16 +456,18 @@ function createRideCard({ provider, vehicle, rate, distance }) {
 
 function createReply({ route, cards, modes, distance }) {
   const lines = [`${route.origin} to ${route.destination}:`];
-  const busCard = cards.find((card) => card.type === "bus");
+  const busCards = cards.filter((card) => card.type === "bus");
 
-  if (busCard) {
-    lines.push(
-      "",
-      "Bus:",
-      `1. ${busCard.title}`,
-      `   Fare: BDT ${busCard.fare.general}, Student: BDT ${busCard.fare.student}`,
-      `   Route: ${route.origin} -> ${route.destination}`
-    );
+  if (busCards.length) {
+    lines.push("", "Bus:");
+
+    for (const [index, busCard] of busCards.entries()) {
+      lines.push(
+        `${index + 1}. ${busCard.title}`,
+        `   Fare: BDT ${busCard.fare.general}, Student: BDT ${busCard.fare.student}`,
+        `   Route: ${busCard.route.originStopName} -> ${busCard.route.destinationStopName}`
+      );
+    }
   } else if (modes.includes("bus")) {
     lines.push("", "Bus: No direct database match found for this route yet.");
   }
@@ -503,8 +586,17 @@ export async function getDemoChatResponse(message) {
     return createClarificationResponse(message);
   }
 
-  const demoRoute = findDemoRoute(normalized);
+  const staticBusRoutes = parsedRoute
+    ? findStaticBusRoutes(parsedRoute.origin, parsedRoute.destination)
+    : [];
+  const demoRoute = staticBusRoutes.length ? null : findDemoRoute(normalized);
   const route =
+    (staticBusRoutes.length
+      ? {
+          origin: parsedRoute.origin,
+          destination: parsedRoute.destination
+        }
+      : null) ||
     demoRoute ||
     (parsedRoute
       ? {
@@ -518,7 +610,8 @@ export async function getDemoChatResponse(message) {
     return createNoRouteResponse(message);
   }
 
-  const hasBusMatch = Boolean(demoRoute);
+  const busRoutes = staticBusRoutes.length ? staticBusRoutes : demoRoute ? [demoRoute] : [];
+  const hasBusMatch = busRoutes.length > 0;
   const requestedModes = detectModes(normalized);
   const modes =
     requestedModes.includes("bus") && !hasBusMatch
@@ -528,7 +621,7 @@ export async function getDemoChatResponse(message) {
   const cards = [];
 
   if (modes.includes("bus") && hasBusMatch) {
-    cards.push(createBusCard(demoRoute));
+    cards.push(...busRoutes.map((busRoute, index) => createBusCard(busRoute, index)));
   }
 
   if (modes.includes("cng")) {
