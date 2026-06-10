@@ -73,6 +73,58 @@ test("classifies a greeting locally without calling an LLM", async () => {
   assert.equal(primaryClient.calls.length, 0);
 });
 
+test("classifies Banglish identity questions locally without calling an LLM", async () => {
+  const primaryClient = createMockClient({
+    responses: [new Error("should not be called")]
+  });
+
+  for (const message of ["Tomar nam ki", "tumar naam ki?", "tomar name ki", "ke tumi?", "who r u"]) {
+    const intent = await extractIntent(message, {
+      primaryClient,
+      includeMeta: true
+    });
+
+    assert.equal(intent.intentType, "conversation", `expected conversation for ${message}`);
+    assert.match(intent.conversationReply, /RouteGPT/);
+    assert.equal(intent.meta.provider, "local");
+  }
+
+  assert.equal(primaryClient.calls.length, 0);
+});
+
+test("classifies Banglish small talk locally without calling an LLM", async () => {
+  const primaryClient = createMockClient({
+    responses: [new Error("should not be called")]
+  });
+
+  const wellbeing = await extractIntent("kemon acho?", {
+    primaryClient,
+    includeMeta: true
+  });
+  assert.equal(wellbeing.intentType, "conversation");
+  assert.match(wellbeing.conversationReply, /doing great/i);
+
+  const thanks = await extractIntent("dhonnobad bhai", {
+    primaryClient,
+    includeMeta: true
+  });
+  assert.equal(thanks.intentType, "conversation");
+  assert.match(thanks.conversationReply, /welcome/i);
+
+  assert.equal(primaryClient.calls.length, 0);
+});
+
+test("shortened place names with theke still parse as routes", async () => {
+  const intent = await extractIntent("kuril theke mirpur 1 bus", {
+    includeMeta: true
+  });
+
+  assert.equal(intent.intentType, "route");
+  assert.equal(intent.origin, "Kuril");
+  assert.equal(intent.destination, "Mirpur 1");
+  assert.deepEqual(intent.modes, ["bus"]);
+});
+
 test("detects a named bus route request locally without calling an LLM", async () => {
   const primaryClient = createMockClient({
     responses: [new Error("should not be called")]

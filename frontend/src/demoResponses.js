@@ -18,8 +18,10 @@ const DEMO_LANDMARKS = Object.freeze({
   gabtoli: [23.783, 90.344],
   gulistan: [23.725, 90.411],
   gulshan: [23.7925, 90.4078],
+  "jamuna future park": [23.813, 90.424],
   jatrabari: [23.7104, 90.434],
   khilgaon: [23.75, 90.426],
+  kuril: [23.821, 90.421],
   mirpur: [23.807, 90.368],
   "mirpur 1": [23.8006, 90.353],
   "mirpur 10": [23.807, 90.368],
@@ -153,10 +155,10 @@ function getDemoConversationReply(normalized) {
   }
 
   if (
-    /(?:\byour name\b|\btomar (?:naam|nam)\b|\btumi ke\b|\bke tumi\b|\bapni ke\b|\bwho are you\b|\bwhat are you\b|\bintroduce yourself\b)/.test(
+    /(?:\b(?:your|ur)\s+name\b|\bt[ou]ma?r\s+na+me?\b|\bapna?r\s+na+me?\b|\btum[ie]\s+ke\b|\bke\s+tum[ie]\b|\bapni\s+ke\b|\bwho\s+(?:are|r)\s+(?:you|u)\b|\bwhat\s+are\s+(?:you|u)\b|\bintroduce\s+yourself\b)/.test(
       compact
     ) ||
-    /তোমার নাম|তুমি কে|আপনি কে/.test(normalized)
+    /তোমার নাম|আপনার নাম|তুমি কে|আপনি কে/.test(normalized)
   ) {
     return (
       "I'm RouteGPT — a Dhaka transport assistant. I find bus routes from local route data, " +
@@ -166,7 +168,7 @@ function getDemoConversationReply(normalized) {
   }
 
   if (
-    /\bwho (?:made|built|created) you\b|\bke (?:baniyeche|banaise|banalo)\b/.test(compact) ||
+    /\bwho\s+(?:made|built|created)\s+(?:you|u)\b|\bke\s+(?:baniyeche|banaise|banalo)\b/.test(compact) ||
     /কে বানিয়েছে|কে তৈরি করেছে/.test(normalized)
   ) {
     return (
@@ -176,7 +178,7 @@ function getDemoConversationReply(normalized) {
   }
 
   if (
-    /\bhow are you\b|\bkemon (?:acho|achen|aso)\b/.test(compact) ||
+    /\bhow\s+(?:are|r)\s+(?:you|u)\b|\bkemon\s+a(?:ch|s)(?:o|en|os|is)\b/.test(compact) ||
     /কেমন আছো|কেমন আছেন/.test(normalized)
   ) {
     return (
@@ -186,7 +188,9 @@ function getDemoConversationReply(normalized) {
   }
 
   if (
-    /\b(?:thank you|thanks|thank u|thx|dhonnobad|dhonnyobad)\b/.test(compact) ||
+    /\b(?:thank\s+(?:you|u)|thanks|thx|tnx|dhonnobad|dhonnyobad|dhonobad|dhonnobaad|dhanyabad)\b/.test(
+      compact
+    ) ||
     /ধন্যবাদ/.test(normalized)
   ) {
     return "You're welcome! Safe travels — and ask me anytime you need another Dhaka route.";
@@ -411,12 +415,26 @@ function buildLookupTerms(place) {
   return [...new Set(terms)];
 }
 
+// Users often shorten multi-word places to the leading word ("kuril" for
+// "Kuril Bishwa Road" or "Kuril Chourasta"). Digits stay significant so
+// "Mirpur 1" never crosses over to "Mirpur 10".
+function firstWordsEquivalent(a, b) {
+  if (!a || !b || /\d/.test(a) || /\d/.test(b)) return false;
+
+  const firstA = a.split(" ")[0];
+  const firstB = b.split(" ")[0];
+  return firstA.length >= 5 && firstA === firstB;
+}
+
 function stopMatches(stop, terms) {
   const values = [stop.name, stop.nameBn, stop.raw].flatMap(getLookupVariants);
 
-  return terms.some((term) =>
-    values.some((value) => isCloseLookupMatch(term, value))
-  );
+  if (terms.some((term) => values.some((value) => isCloseLookupMatch(term, value)))) {
+    return true;
+  }
+
+  const stopNames = [stop.name, stop.nameBn].map(normalizeLookupText).filter(Boolean);
+  return terms.some((term) => stopNames.some((value) => firstWordsEquivalent(term, value)));
 }
 
 function findStaticBusRoutes(origin, destination, maxResults = 5) {

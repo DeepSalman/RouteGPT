@@ -24,6 +24,15 @@ test("answers identity questions instead of asking for a route", async () => {
   }
 });
 
+test("understands Banglish typo variants of identity questions", async () => {
+  for (const message of ["Tomar nam ki", "tumar naam ki?", "tomar name ki", "who r u"]) {
+    const result = await getDemoChatResponse(message);
+
+    assert.equal(result.type, "conversation", `expected conversation for ${message}`);
+    assert.match(result.reply, /RouteGPT/);
+  }
+});
+
 test("answers creator questions", async () => {
   const result = await getDemoChatResponse("Who made you?");
 
@@ -39,6 +48,10 @@ test("responds to thanks and small talk", async () => {
   const wellbeing = await getDemoChatResponse("how are you?");
   assert.equal(wellbeing.type, "conversation");
   assert.match(wellbeing.reply, /doing great/i);
+
+  const banglishWellbeing = await getDemoChatResponse("kemon aso?");
+  assert.equal(banglishWellbeing.type, "conversation");
+  assert.match(banglishWellbeing.reply, /doing great/i);
 });
 
 test("handles unusual general questions conversationally", async () => {
@@ -66,6 +79,22 @@ test("still returns a named bus full route", async () => {
   assert.equal(result.cards.length, 1);
   assert.equal(result.cards[0].type, "bus_route");
   assert.ok(result.cards[0].stops.length > 5, "expected the full Raida stop list");
+});
+
+test("matches shortened stop names like kuril", async () => {
+  const result = await getDemoChatResponse("kuril to airport bus");
+
+  assert.equal(result.type, "answer");
+  assert.ok(result.results.buses.length > 0, "expected bus results for kuril");
+  assert.match(result.results.buses[0].route.originStopName, /^Kuril/);
+});
+
+test("matches sibling variants of multi-word stop names by first word", async () => {
+  const result = await getDemoChatResponse("kuril flyover to airport bus");
+
+  assert.equal(result.type, "answer");
+  assert.ok(result.results.buses.length > 0, "expected bus results for kuril flyover");
+  assert.match(result.results.buses[0].route.originStopName, /^Kuril/);
 });
 
 test("still estimates CNG fares", async () => {

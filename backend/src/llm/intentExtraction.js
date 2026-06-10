@@ -12,8 +12,60 @@ const CONVERSATION_REPLIES = Object.freeze({
   greeting:
     "Hello! Tell me your starting point and destination in Dhaka, and I can check bus routes plus CNG, Pathao, and Uber estimates.",
   help:
-    "I can help with Dhaka route questions. Try something like \"Gabtoli to Mirpur 1\", \"Bashundhara theke Jatrabari bus\", or \"Gulshan to Dhanmondi CNG\"."
+    "I can help with Dhaka route questions. Try something like \"Gabtoli to Mirpur 1\", \"Bashundhara theke Jatrabari bus\", or \"Gulshan to Dhanmondi CNG\".",
+  identity:
+    "I'm RouteGPT, your Dhaka transport assistant. I find bus routes from local route data, calculate bus and student fares, and estimate CNG, Pathao, and Uber costs. Where do you want to go?",
+  creator:
+    "I'm RouteGPT, built to turn Dhaka's everyday transport knowledge into a structured assistant. Ask me a route like \"Gabtoli to Mirpur 1\".",
+  wellbeing:
+    "I'm doing great, thanks for asking! Tell me your starting point and destination and I'll check the routes.",
+  thanks: "You're welcome! Ask me anytime you need another Dhaka route."
 });
+// Small talk must never reach the LLM as a route query, even with Banglish typos
+// (tomar/tumar/tomr, nam/naam/name, kemon acho/aso). Messages with route separator
+// words are excluded so "thanks, Gabtoli to Mirpur" still parses as a route.
+const ROUTE_SEPARATOR_HINT = /\b(?:from|to|theke)\b|থেকে|হতে|টু/i;
+const LOCAL_SMALL_TALK_RULES = Object.freeze([
+  {
+    replyKey: "identity",
+    patterns: [
+      /\b(?:your|ur)\s+name\b/,
+      /\bt[ou]ma?r\s+na+me?\b/,
+      /\bapna?r\s+na+me?\b/,
+      /\btum[ie]\s+ke\b/,
+      /\bke\s+tum[ie]\b/,
+      /\bapni\s+ke\b/,
+      /\bwho\s+(?:are|r)\s+(?:you|u)\b/,
+      /\bwhat\s+are\s+(?:you|u)\b/,
+      /\bintroduce\s+yourself\b/,
+      /তোমার নাম|আপনার নাম|তুমি কে|আপনি কে/
+    ]
+  },
+  {
+    replyKey: "creator",
+    patterns: [
+      /\bwho\s+(?:made|built|created)\s+(?:you|u)\b/,
+      /\bke\s+(?:banaise|baniyeche|banalo)\b/,
+      /কে বানিয়েছে|কে তৈরি করেছে/
+    ]
+  },
+  {
+    replyKey: "wellbeing",
+    patterns: [
+      /\bhow\s+(?:are|r)\s+(?:you|u)\b/,
+      /\bkemon\s+a(?:ch|s)(?:o|en|os|is)\b/,
+      /কেমন আছো|কেমন আছেন/
+    ]
+  },
+  {
+    replyKey: "thanks",
+    patterns: [
+      /\b(?:thanks|thank\s+(?:you|u)|thx|tnx)\b/,
+      /\b(?:dhonnobad|dhonnyobad|dhonobad|dhonnobaad|dhanyabad)\b/,
+      /ধন্যবাদ/
+    ]
+  }
+]);
 const LEADING_ROUTE_WORDS =
   /^(?:how\s+(?:do|can)\s+i\s+(?:go|get)|how\s+to\s+(?:go|get)|route|bus\s+route|student\s+fare\s+koto|fare\s+koto|student\s+fare|student|ami|i|from|আমি|আমার|আমাকে|কিভাবে|কীভাবে)\s+/i;
 const TRAILING_ROUTE_WORDS =
@@ -236,6 +288,14 @@ function buildLocalClarificationIntent() {
   });
 }
 
+function normalizeSmallTalkText(message) {
+  return String(message || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9ঀ-৿\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function detectLocalConversationIntent(message) {
   if (isGreetingMessage(message)) {
     return createConversationIntent(CONVERSATION_REPLIES.greeting);
@@ -243,6 +303,18 @@ function detectLocalConversationIntent(message) {
 
   if (isHelpMessage(message)) {
     return createConversationIntent(CONVERSATION_REPLIES.help);
+  }
+
+  const normalized = normalizeSmallTalkText(message);
+
+  if (!normalized || ROUTE_SEPARATOR_HINT.test(normalized)) {
+    return null;
+  }
+
+  for (const rule of LOCAL_SMALL_TALK_RULES) {
+    if (rule.patterns.some((pattern) => pattern.test(normalized))) {
+      return createConversationIntent(CONVERSATION_REPLIES[rule.replyKey]);
+    }
   }
 
   return null;

@@ -144,6 +144,11 @@ function buildRouteLookupSql() {
             WHEN route.origin_stop_name ILIKE '%' || origin_aliases.name || '%' THEN 0.85
             WHEN coalesce(route.origin_stop_name_bn, '') ILIKE '%' || origin_aliases.name || '%' THEN 0.85
             WHEN origin_aliases.name ILIKE '%' || route.origin_stop_name || '%' THEN 0.85
+            WHEN origin_aliases.name !~ '[0-9]'
+              AND route.origin_stop_name !~ '[0-9]'
+              AND length(split_part(lower(origin_aliases.name), ' ', 1)) >= 5
+              AND split_part(lower(route.origin_stop_name), ' ', 1) = split_part(lower(origin_aliases.name), ' ', 1)
+              THEN 0.7
             ELSE 0
           END
         ) +
@@ -160,6 +165,11 @@ function buildRouteLookupSql() {
             WHEN route.destination_stop_name ILIKE '%' || destination_aliases.name || '%' THEN 0.85
             WHEN coalesce(route.destination_stop_name_bn, '') ILIKE '%' || destination_aliases.name || '%' THEN 0.85
             WHEN destination_aliases.name ILIKE '%' || route.destination_stop_name || '%' THEN 0.85
+            WHEN destination_aliases.name !~ '[0-9]'
+              AND route.destination_stop_name !~ '[0-9]'
+              AND length(split_part(lower(destination_aliases.name), ' ', 1)) >= 5
+              AND split_part(lower(route.destination_stop_name), ' ', 1) = split_part(lower(destination_aliases.name), ' ', 1)
+              THEN 0.7
             ELSE 0
           END
         ) AS match_score
@@ -181,6 +191,12 @@ function buildRouteLookupSql() {
         )
         OR similarity(route.origin_stop_name, origin_aliases.name) > 0.35
         OR similarity(coalesce(route.origin_stop_name_bn, ''), origin_aliases.name) > 0.35
+        OR (
+          origin_aliases.name !~ '[0-9]'
+          AND route.origin_stop_name !~ '[0-9]'
+          AND length(split_part(lower(origin_aliases.name), ' ', 1)) >= 5
+          AND split_part(lower(route.origin_stop_name), ' ', 1) = split_part(lower(origin_aliases.name), ' ', 1)
+        )
       JOIN destination_aliases
         ON lower(route.destination_stop_name) = lower(destination_aliases.name)
         OR lower(coalesce(route.destination_stop_name_bn, '')) = lower(destination_aliases.name)
@@ -198,6 +214,12 @@ function buildRouteLookupSql() {
         )
         OR similarity(route.destination_stop_name, destination_aliases.name) > 0.35
         OR similarity(coalesce(route.destination_stop_name_bn, ''), destination_aliases.name) > 0.35
+        OR (
+          destination_aliases.name !~ '[0-9]'
+          AND route.destination_stop_name !~ '[0-9]'
+          AND length(split_part(lower(destination_aliases.name), ' ', 1)) >= 5
+          AND split_part(lower(route.destination_stop_name), ' ', 1) = split_part(lower(destination_aliases.name), ' ', 1)
+        )
     )
     SELECT DISTINCT ON (bus_id, origin_stop_order, destination_stop_order)
       bus_id,

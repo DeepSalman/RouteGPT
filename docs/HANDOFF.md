@@ -251,6 +251,10 @@ origin.stop_order < destination.stop_order
 
 This avoids returning reverse-direction routes unless that reverse route exists as ordered data.
 
+Place matching rule:
+
+Users often type only the leading word of a longer stop name ("kuril" for "Kuril Bishwa Road" or "Kuril Chourasta"). Both the SQL lookup and the static demo matcher treat names as equivalent when their first word matches (length >= 5, and never across names containing digits, so "Mirpur 1" cannot match "Mirpur 10").
+
 ## 8. Fare Rules
 
 Bus fare:
@@ -307,6 +311,7 @@ Important guardrails:
 Local non-LLM guards already handle:
 
 - Greetings like `hello` (classification only; the reply text is LLM-written when a provider is configured).
+- Identity, thanks, and small-talk Banglish with typo variants (`tomar/tumar nam/naam/name ki`, `kemon acho/aso`, `dhonnobad`), so these never reach the LLM as route queries.
 - Basic help messages.
 - Simple route syntax such as `A to B` or `A theke B`.
 - Named bus route requests such as `Raida bus er route bolo`.

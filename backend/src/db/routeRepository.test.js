@@ -15,6 +15,14 @@ test("route lookup SQL supports compact and Bengali stop matching", () => {
   assert.match(sql, /regexp_replace\(lower/);
 });
 
+test("route lookup SQL matches shortened first-word place names without crossing numbered stops", () => {
+  const sql = buildRouteLookupSql();
+
+  assert.match(sql, /split_part\(lower\(route\.origin_stop_name\), ' ', 1\)/);
+  assert.match(sql, /split_part\(lower\(route\.destination_stop_name\), ' ', 1\)/);
+  assert.match(sql, /!~ '\[0-9\]'/);
+});
+
 test("bus route detail SQL supports fuzzy bus-name matching and ordered stops", () => {
   const sql = buildBusRouteDetailSql();
 
