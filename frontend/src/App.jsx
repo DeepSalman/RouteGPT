@@ -141,7 +141,13 @@ function getReportKey(card, index) {
 function Sidebar({ onNewChat }) {
   return (
     <aside className="sidebar">
-      <div className="sidebar-title">Dhaka Transport Assistant</div>
+      <div className="sidebar-brand">
+        <div className="brand-mark">R</div>
+        <div>
+          <strong>RouteGPT</strong>
+          <span>Dhaka transport</span>
+        </div>
+      </div>
 
       <nav className="sidebar-nav" aria-label="Main">
         <button className="nav-item nav-item-active" type="button" onClick={onNewChat}>
@@ -178,7 +184,9 @@ function Sidebar({ onNewChat }) {
 function Header({ onAccountClick }) {
   return (
     <header className="topbar">
-      <strong>RouteGPT</strong>
+      <div className="topbar-title">
+        <strong>RouteGPT</strong>
+      </div>
       <button
         className="icon-button"
         type="button"
@@ -357,13 +365,15 @@ function ChatMessage({ message }) {
 function Composer({ value, disabled, onChange, onSubmit }) {
   return (
     <form className="composer" aria-busy={disabled} onSubmit={onSubmit}>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        placeholder={disabled ? "Finding route options..." : "Ask a route..."}
-        aria-label="Ask a route"
-      />
+      <div className="composer-field">
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          placeholder={disabled ? "Finding route options..." : "Ask a route..."}
+          aria-label="Ask a route"
+        />
+      </div>
       <button className="send-button" type="submit" disabled={disabled || !value.trim()}>
         {disabled ? <Loader2 className="spin" size={22} /> : <SendHorizontal size={22} />}
         <span className="sr-only">Send</span>
@@ -521,7 +531,6 @@ export default function App() {
             onChange={setDraft}
             onSubmit={submitMessage}
           />
-          <p>ROUTEGPT V1.0 - BUILT FOR DHAKA</p>
         </footer>
       </div>
 
