@@ -6,7 +6,21 @@ function formatFareRange(range, currency = "BDT") {
   return `~${currency} ${range.min}-${range.max}`;
 }
 
-function formatChatReply({ intent, busCards, cngCard, rideCards, distance }) {
+function formatChatReply({
+  intent,
+  busCards,
+  cngCard,
+  rideCards,
+  distance,
+  effectiveModes = intent.modes
+}) {
+  if (intent.intentType === "conversation") {
+    return (
+      intent.conversationReply ||
+      "Hello! Tell me your starting point and destination in Dhaka."
+    );
+  }
+
   if (intent.needsClarification) {
     return intent.clarificationQuestion;
   }
@@ -27,7 +41,10 @@ function formatChatReply({ intent, busCards, cngCard, rideCards, distance }) {
       );
     }
   } else if (intent.modes.includes("bus")) {
-    lines.push("", "Bus: No matching database route found.");
+    lines.push(
+      "",
+      "Bus: No direct database match found for this route yet."
+    );
   }
 
   if (cngCard) {
@@ -40,6 +57,11 @@ function formatChatReply({ intent, busCards, cngCard, rideCards, distance }) {
 
   if (distance) {
     lines.push("", `Distance estimate: ${distance.distanceKm} km, ${distance.durationMin} min.`);
+  } else if (effectiveModes.some((mode) => ["cng", "pathao", "uber"].includes(mode))) {
+    lines.push(
+      "",
+      "Private transport estimates need a distance lookup, but distance is unavailable right now."
+    );
   }
 
   if (rideCards.length) {

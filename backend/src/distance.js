@@ -1,6 +1,92 @@
 const DHAKA_SUFFIX = "Dhaka, Bangladesh";
 const GOOGLE_DISTANCE_MATRIX_URL =
   "https://maps.googleapis.com/maps/api/distancematrix/json";
+const DHAKA_AVERAGE_SPEED_KMPH = 14;
+const DHAKA_ROAD_FACTOR = 1.35;
+
+const DHAKA_LANDMARKS = Object.freeze({
+  agargaon: [23.778, 90.379],
+  airport: [23.8516, 90.4086],
+  "asad gate": [23.7606, 90.3722],
+  azimpur: [23.7294, 90.3856],
+  badda: [23.7808, 90.426],
+  banani: [23.7937, 90.4043],
+  banasree: [23.763, 90.438],
+  basabo: [23.741, 90.432],
+  bashundhara: [23.819, 90.452],
+  "bashundhara r/a": [23.819, 90.452],
+  "baily road": [23.7415, 90.4078],
+  demra: [23.719, 90.489],
+  "ecb square": [23.822, 90.391],
+  farmgate: [23.7563, 90.389],
+  gabtoli: [23.783, 90.344],
+  gulistan: [23.725, 90.411],
+  gulshan: [23.7925, 90.4078],
+  "hatirjheel": [23.766, 90.416],
+  jatrabari: [23.7104, 90.434],
+  "jamuna future park": [23.813, 90.424],
+  kakrail: [23.737, 90.408],
+  kalshi: [23.822, 90.38],
+  kallyanpur: [23.779, 90.361],
+  kazipara: [23.797, 90.371],
+  khilgaon: [23.75, 90.426],
+  kuril: [23.821, 90.421],
+  lalbagh: [23.719, 90.386],
+  malibagh: [23.746, 90.412],
+  "mirpur 1": [23.8006, 90.353],
+  "mirpur 2": [23.806, 90.36],
+  "mirpur 10": [23.807, 90.368],
+  "mirpur 11": [23.818, 90.367],
+  "mirpur 12": [23.824, 90.365],
+  mohakhali: [23.7776, 90.405],
+  mohammadpur: [23.765, 90.358],
+  moghbazar: [23.748, 90.402],
+  motijheel: [23.7337, 90.4173],
+  "new market": [23.733, 90.383],
+  nilkhet: [23.733, 90.386],
+  pallabi: [23.825, 90.364],
+  paltan: [23.735, 90.41],
+  "press club": [23.73, 90.406],
+  purobi: [23.818, 90.364],
+  rampura: [23.763, 90.421],
+  "science lab": [23.738, 90.383],
+  sadarghat: [23.709, 90.407],
+  shahbag: [23.738, 90.395],
+  shantinagar: [23.738, 90.414],
+  shewrapara: [23.79, 90.374],
+  shewra: [23.79, 90.424],
+  shyamoli: [23.774, 90.365],
+  technical: [23.781, 90.352],
+  tejgaon: [23.7615, 90.4],
+  uttara: [23.8759, 90.3795],
+  wari: [23.711, 90.416]
+});
+
+const DHAKA_LANDMARK_ALIASES = Object.freeze({
+  "hazrat shahjalal airport": "airport",
+  "shahjalal airport": "airport",
+  "dhaka airport": "airport",
+  "bashundhara residential area": "bashundhara",
+  "bashundhara ra": "bashundhara",
+  "bashundhara r a": "bashundhara",
+  "jamuna future": "jamuna future park",
+  jfp: "jamuna future park",
+  "mirpur one": "mirpur 1",
+  "mirpur-1": "mirpur 1",
+  "mirpur ten": "mirpur 10",
+  "mirpur-10": "mirpur 10",
+  "mirpur eleven": "mirpur 11",
+  "mirpur-11": "mirpur 11",
+  "mirpur twelve": "mirpur 12",
+  "mirpur-12": "mirpur 12",
+  "kolyanpur": "kallyanpur",
+  "kalyanpur": "kallyanpur",
+  "asadgate": "asad gate",
+  "science laboratory": "science lab",
+  "dhaka university": "shahbag",
+  "du": "shahbag",
+  "old dhaka": "sadarghat"
+});
 
 function normalizePlaceForDistance(place) {
   const value = String(place || "").replace(/\s+/g, " ").trim();
@@ -22,6 +108,104 @@ function metersToKm(meters) {
 
 function secondsToMinutes(seconds) {
   return Math.round(seconds / 60);
+}
+
+function roundDistance(distanceKm) {
+  return Math.max(1, Math.round(distanceKm * 10) / 10);
+}
+
+function normalizeLandmarkKey(place) {
+  return String(place || "")
+    .toLowerCase()
+    .replace(/\b(dhaka|bangladesh)\b/g, " ")
+    .replace(/[^a-z0-9\s/-]/g, " ")
+    .replace(/[/-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveLandmark(place) {
+  const normalized = normalizeLandmarkKey(place);
+  if (!normalized) return null;
+
+  const alias = DHAKA_LANDMARK_ALIASES[normalized] || normalized;
+  if (DHAKA_LANDMARKS[alias]) {
+    return {
+      name: alias,
+      coordinates: DHAKA_LANDMARKS[alias]
+    };
+  }
+
+  const matches = Object.keys(DHAKA_LANDMARKS)
+    .filter((key) => normalized.includes(key) || key.includes(normalized))
+    .sort((a, b) => b.length - a.length);
+
+  if (!matches.length) return null;
+
+  const key = matches[0];
+  return {
+    name: key,
+    coordinates: DHAKA_LANDMARKS[key]
+  };
+}
+
+function toRadians(degrees) {
+  return (degrees * Math.PI) / 180;
+}
+
+function haversineKm([lat1, lon1], [lat2, lon2]) {
+  const earthRadiusKm = 6371;
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(deltaLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+function hashText(value) {
+  return String(value || "")
+    .split("")
+    .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7);
+}
+
+function estimateTextDistanceKm(origin, destination) {
+  const seed = Math.abs(hashText(origin) - hashText(destination));
+  return roundDistance(4 + (seed % 130) / 10);
+}
+
+function estimateDhakaDistance({ origin, destination }) {
+  const originLandmark = resolveLandmark(origin);
+  const destinationLandmark = resolveLandmark(destination);
+  let distanceKm;
+  let source;
+
+  if (originLandmark && destinationLandmark) {
+    const straightLineKm = haversineKm(
+      originLandmark.coordinates,
+      destinationLandmark.coordinates
+    );
+    distanceKm = roundDistance(straightLineKm * DHAKA_ROAD_FACTOR + 0.8);
+    source = "approximate_landmark";
+  } else {
+    distanceKm = estimateTextDistanceKm(origin, destination);
+    source = "rough_text_estimate";
+  }
+
+  return {
+    origin,
+    destination,
+    distanceKm,
+    durationMin: Math.max(
+      8,
+      Math.round((distanceKm / DHAKA_AVERAGE_SPEED_KMPH) * 60)
+    ),
+    source,
+    confidence: source === "approximate_landmark" ? "medium" : "low"
+  };
 }
 
 function createGoogleDistanceService({
@@ -73,4 +257,17 @@ function createGoogleDistanceService({
   };
 }
 
-export { createGoogleDistanceService, normalizePlaceForDistance };
+function createApproximateDistanceService() {
+  return {
+    async getDistance({ origin, destination }) {
+      return estimateDhakaDistance({ origin, destination });
+    }
+  };
+}
+
+export {
+  createApproximateDistanceService,
+  createGoogleDistanceService,
+  estimateDhakaDistance,
+  normalizePlaceForDistance
+};

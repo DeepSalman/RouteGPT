@@ -5,7 +5,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleChatMessage } from "./chat/chatService.js";
 import { createDefaultRouteRepository } from "./db/pool.js";
-import { createGoogleDistanceService } from "./distance.js";
+import {
+  createApproximateDistanceService,
+  createGoogleDistanceService
+} from "./distance.js";
 
 const port = process.env.PORT || 4000;
 const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
@@ -20,9 +23,11 @@ function createApp({
     routeRepository || (chatHandler ? null : createDefaultRouteRepository());
   const resolvedDistanceService =
     distanceService ||
-    (chatHandler || !process.env.GOOGLE_MAPS_API_KEY
+    (chatHandler
       ? null
-      : createGoogleDistanceService());
+      : process.env.GOOGLE_MAPS_API_KEY
+        ? createGoogleDistanceService()
+        : createApproximateDistanceService());
   const resolveChat =
     chatHandler ||
     ((message) =>

@@ -7,6 +7,7 @@ import { extractIntent } from "../llm/intentExtraction.js";
 import { formatChatReply } from "./responseFormatter.js";
 
 const DISTANCE_MODES = Object.freeze(["cng", "pathao", "uber"]);
+const PRIVATE_TRANSPORT_MODES = Object.freeze(["cng", "pathao", "uber"]);
 
 function validateChatMessage(message) {
   if (typeof message !== "string") {
@@ -28,6 +29,11 @@ function validateChatMessage(message) {
 
 function shouldFetchDistance(modes) {
   return modes.some((mode) => DISTANCE_MODES.includes(mode));
+}
+
+function addPrivateTransportFallbackModes(modes) {
+  const requestedModes = Array.isArray(modes) ? modes : [];
+  return [...new Set([...requestedModes, ...PRIVATE_TRANSPORT_MODES])];
 }
 
 function buildBusCard(route) {
@@ -104,8 +110,8 @@ function buildRideCards(distance, modes) {
     }));
 }
 
-async function maybeGetDistance({ intent, distanceService }) {
-  if (!distanceService || !shouldFetchDistance(intent.modes)) {
+async function maybeGetDistance({ intent, modes, distanceService }) {
+  if (!distanceService || !shouldFetchDistance(modes)) {
     return {
       distance: null,
       distanceError: null
@@ -143,6 +149,31 @@ async function handleChatMessage(
   const normalizedMessage = validateChatMessage(message);
   const intent = await intentExtractor(normalizedMessage, { includeMeta: true });
 
+  if (intent.intentType === "conversation") {
+    return {
+      ok: true,
+      type: "conversation",
+      message: normalizedMessage,
+      intent,
+      reply: formatChatReply({
+        intent,
+        busCards: [],
+        cngCard: null,
+        rideCards: [],
+        distance: null
+      }),
+      cards: [],
+      results: {
+        buses: [],
+        cng: null,
+        rideHailing: []
+      },
+      meta: {
+        inventedRoutes: false
+      }
+    };
+  }
+
   if (intent.needsClarification) {
     return {
       ok: true,
@@ -173,11 +204,19 @@ async function handleChatMessage(
           maxResults: maxBusResults
         })
       : [];
+  const effectiveModes =
+    intent.modes.includes("bus") && routes.length === 0
+      ? addPrivateTransportFallbackModes(intent.modes)
+      : intent.modes;
   const busCards = routes.map(buildBusCard);
-  const { distance, distanceError } = await maybeGetDistance({ intent, distanceService });
+  const { distance, distanceError } = await maybeGetDistance({
+    intent,
+    modes: effectiveModes,
+    distanceService
+  });
   const cngCard =
-    distance && intent.modes.includes("cng") ? buildCngCard(distance, isNightFare) : null;
-  const rideCards = distance ? buildRideCards(distance, intent.modes) : [];
+    distance && effectiveModes.includes("cng") ? buildCngCard(distance, isNightFare) : null;
+  const rideCards = distance ? buildRideCards(distance, effectiveModes) : [];
   const cards = [...busCards, ...(cngCard ? [cngCard] : []), ...rideCards];
 
   return {
@@ -190,7 +229,8 @@ async function handleChatMessage(
       busCards,
       cngCard,
       rideCards,
-      distance
+      distance,
+      effectiveModes
     }),
     cards,
     results: {
@@ -201,6 +241,7 @@ async function handleChatMessage(
     meta: {
       distance,
       distanceError,
+      fallbackModesAdded: effectiveModes.length !== intent.modes.length,
       busRouteSource: "database",
       inventedRoutes: false
     }

@@ -89,6 +89,57 @@ test("answers bus-only route query from database results", async () => {
   assert.match(result.reply, /Achim Paribahan/);
 });
 
+test("greets instead of treating hello as a route query", async () => {
+  const routeRepository = createRouteRepository();
+  const distanceService = createDistanceService();
+
+  const result = await handleChatMessage("hello", {
+    intentExtractor: createIntentExtractor({
+      intentType: "conversation",
+      origin: null,
+      destination: null,
+      modes: [],
+      studentFare: false,
+      needsClarification: false,
+      clarificationQuestion: null,
+      conversationReply: "Hello! Tell me where you want to go."
+    }),
+    routeRepository,
+    distanceService
+  });
+
+  assert.equal(result.type, "conversation");
+  assert.match(result.reply, /Hello/);
+  assert.equal(result.cards.length, 0);
+  assert.equal(routeRepository.calls.length, 0);
+  assert.equal(distanceService.calls.length, 0);
+});
+
+test("missing bus route falls back to CNG and ride estimates", async () => {
+  const routeRepository = createRouteRepository([]);
+  const distanceService = createDistanceService({ distanceKm: 6, durationMin: 26 });
+
+  const result = await handleChatMessage("Unknown A to Unknown B bus", {
+    intentExtractor: createIntentExtractor({
+      ...baseIntent,
+      origin: "Unknown A",
+      destination: "Unknown B",
+      modes: ["bus"]
+    }),
+    routeRepository,
+    distanceService
+  });
+
+  assert.equal(routeRepository.calls.length, 1);
+  assert.equal(distanceService.calls.length, 1);
+  assert.equal(result.results.buses.length, 0);
+  assert.equal(result.results.cng.fare.amount, 110);
+  assert.equal(result.results.rideHailing.length, 4);
+  assert.equal(result.meta.fallbackModesAdded, true);
+  assert.match(result.reply, /No direct database match/);
+  assert.match(result.reply, /Pathao Bike/);
+});
+
 test("mode filtering skips bus database lookup for cng-only query", async () => {
   const routeRepository = createRouteRepository();
   const distanceService = createDistanceService();

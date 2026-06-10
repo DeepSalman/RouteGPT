@@ -4,14 +4,20 @@ const INTENT_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
   required: [
+    "intentType",
     "origin",
     "destination",
     "modes",
     "studentFare",
     "needsClarification",
-    "clarificationQuestion"
+    "clarificationQuestion",
+    "conversationReply"
   ],
   properties: {
+    intentType: {
+      type: "string",
+      enum: ["route", "conversation"]
+    },
     origin: {
       anyOf: [{ type: "string" }, { type: "null" }]
     },
@@ -33,6 +39,9 @@ const INTENT_SCHEMA = Object.freeze({
     },
     clarificationQuestion: {
       anyOf: [{ type: "string" }, { type: "null" }]
+    },
+    conversationReply: {
+      anyOf: [{ type: "string" }, { type: "null" }]
     }
   }
 });
@@ -44,6 +53,7 @@ Return only one JSON object. Do not return Markdown, comments, or prose.
 
 Your job:
 - Understand Banglish, Bengali, and English transport queries.
+- Classify greetings, thanks, and general app-help messages as conversation, not route.
 - Extract origin and destination as concise English canonical-looking Dhaka place names.
 - Detect transport modes only when the user mentions them.
 - If no mode is mentioned, use all modes: ["bus","cng","pathao","uber"].
@@ -51,6 +61,8 @@ Your job:
 - If origin or destination is missing, set the missing field to null and needsClarification to true.
 - If a location is ambiguous, set needsClarification to true and ask a short clarification question.
 - Never invent transport routes, bus names, fares, or facts.
+- For conversation messages, set intentType to "conversation", origin and destination to null, modes to [], needsClarification to false, and include a short conversationReply.
+- For transport requests, set intentType to "route".
 
 Allowed modes:
 - "bus"
@@ -67,29 +79,34 @@ Mode hints:
 
 Return this exact JSON shape:
 {
+  "intentType": "route",
   "origin": "Gabtoli",
   "destination": "Mirpur 1",
   "modes": ["bus"],
   "studentFare": false,
   "needsClarification": false,
-  "clarificationQuestion": null
+  "clarificationQuestion": null,
+  "conversationReply": null
 }
 
 Examples:
 User: "Gabtoli theke Mirpur 1 bus e jabo"
-JSON: {"origin":"Gabtoli","destination":"Mirpur 1","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null}
+JSON: {"intentType":"route","origin":"Gabtoli","destination":"Mirpur 1","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "mirpur 10 to motijheel"
-JSON: {"origin":"Mirpur 10","destination":"Motijheel","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null}
+JSON: {"intentType":"route","origin":"Mirpur 10","destination":"Motijheel","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "গুলশান থেকে ধানমন্ডি সিএনজি"
-JSON: {"origin":"Gulshan","destination":"Dhanmondi","modes":["cng"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null}
+JSON: {"intentType":"route","origin":"Gulshan","destination":"Dhanmondi","modes":["cng"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "Student fare koto Gabtoli to Mirpur 1?"
-JSON: {"origin":"Gabtoli","destination":"Mirpur 1","modes":["bus","cng","pathao","uber"],"studentFare":true,"needsClarification":false,"clarificationQuestion":null}
+JSON: {"intentType":"route","origin":"Gabtoli","destination":"Mirpur 1","modes":["bus","cng","pathao","uber"],"studentFare":true,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "farmgate boss?"
-JSON: {"origin":null,"destination":"Farmgate","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":true,"clarificationQuestion":"Where are you starting from?"}
+JSON: {"intentType":"route","origin":null,"destination":"Farmgate","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":true,"clarificationQuestion":"Where are you starting from?","conversationReply":null}
+
+User: "hello"
+JSON: {"intentType":"conversation","origin":null,"destination":null,"modes":[],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":"Hello! Tell me your starting point and destination in Dhaka."}
 `.trim();
 
 function buildIntentExtractionPrompt(userMessage) {
@@ -118,12 +135,14 @@ ${validationError}
 
 Return only one valid JSON object with this shape:
 {
+  "intentType": "route" or "conversation",
   "origin": string or null,
   "destination": string or null,
   "modes": array of "bus" | "cng" | "pathao" | "uber",
   "studentFare": boolean,
   "needsClarification": boolean,
-  "clarificationQuestion": string or null
+  "clarificationQuestion": string or null,
+  "conversationReply": string or null
 }
 `.trim();
 }

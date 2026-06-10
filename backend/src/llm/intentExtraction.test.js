@@ -56,6 +56,35 @@ test("normalizes missing modes to all supported modes", () => {
   assert.deepEqual(intent.modes, ["bus", "cng", "pathao", "uber"]);
 });
 
+test("classifies a greeting locally without calling an LLM", async () => {
+  const primaryClient = createMockClient({
+    responses: [new Error("should not be called")]
+  });
+
+  const intent = await extractIntent("hello", {
+    primaryClient,
+    includeMeta: true
+  });
+
+  assert.equal(intent.intentType, "conversation");
+  assert.equal(intent.needsClarification, false);
+  assert.match(intent.conversationReply, /Hello/);
+  assert.equal(intent.meta.provider, "local");
+  assert.equal(primaryClient.calls.length, 0);
+});
+
+test("uses local route parsing when providers are unavailable", async () => {
+  const intent = await extractIntent("Bashundhara theke Jatrabari bus e jabo", {
+    includeMeta: true
+  });
+
+  assert.equal(intent.intentType, "route");
+  assert.equal(intent.origin, "Bashundhara");
+  assert.equal(intent.destination, "Jatrabari");
+  assert.deepEqual(intent.modes, ["bus"]);
+  assert.equal(intent.meta.provider, "local");
+});
+
 test("extracts Banglish bus intent with Gemini primary", async () => {
   const primaryClient = createMockClient({
     responses: [

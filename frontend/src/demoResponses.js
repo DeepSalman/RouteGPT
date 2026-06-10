@@ -3,6 +3,39 @@ const DEFAULT_DISTANCE = Object.freeze({
   distanceKm: 7.4,
   durationMin: 32
 });
+const DEMO_AVERAGE_SPEED_KMPH = 14;
+const DEMO_ROAD_FACTOR = 1.35;
+const DEMO_LANDMARKS = Object.freeze({
+  airport: [23.8516, 90.4086],
+  badda: [23.7808, 90.426],
+  banani: [23.7937, 90.4043],
+  bashundhara: [23.819, 90.452],
+  dhanmondi: [23.7465, 90.376],
+  farmgate: [23.7563, 90.389],
+  gabtoli: [23.783, 90.344],
+  gulistan: [23.725, 90.411],
+  gulshan: [23.7925, 90.4078],
+  jatrabari: [23.7104, 90.434],
+  khilgaon: [23.75, 90.426],
+  mirpur: [23.807, 90.368],
+  "mirpur 1": [23.8006, 90.353],
+  "mirpur 10": [23.807, 90.368],
+  mohakhali: [23.7776, 90.405],
+  motijheel: [23.7337, 90.4173],
+  rampura: [23.763, 90.421],
+  shahbag: [23.738, 90.395],
+  uttara: [23.8759, 90.3795]
+});
+const DEMO_RIDE_RATES = Object.freeze({
+  pathao: Object.freeze({
+    bike: Object.freeze({ label: "Pathao Bike", baseFare: 20, perKm: 12, minimumFare: 35 }),
+    car: Object.freeze({ label: "Pathao Car", baseFare: 50, perKm: 22, minimumFare: 80 })
+  }),
+  uber: Object.freeze({
+    moto: Object.freeze({ label: "Uber Moto", baseFare: 25, perKm: 14, minimumFare: 40 }),
+    go: Object.freeze({ label: "Uber Go", baseFare: 55, perKm: 24, minimumFare: 90 })
+  })
+});
 
 const DEMO_ROUTES = Object.freeze([
   {
@@ -80,6 +113,60 @@ function normalizeMessage(message) {
   return message.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function isGreetingMessage(normalized) {
+  return [
+    "hi",
+    "hello",
+    "hey",
+    "salam",
+    "assalamualaikum",
+    "assalamu alaikum",
+    "good morning",
+    "good afternoon",
+    "good evening"
+  ].includes(normalized.replace(/[^a-z0-9\s]/g, "").trim());
+}
+
+function cleanPlaceName(value) {
+  const cleaned = String(value || "")
+    .replace(/^(?:how\s+(?:do|can)\s+i\s+(?:go|get)|how\s+to\s+(?:go|get)|route|student\s+fare\s+koto|fare\s+koto|from)\s+/i, "")
+    .replace(/\b(?:bus|base|buse|local|cng|pathao|uber|bike|car|moto|go|diye|using|public\s+transport|jabo|jete\s+chai|lagbe|fare|koto|please|pls|e|te)\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return null;
+
+  return cleaned
+    .split(" ")
+    .map((part) => (/^[0-9]+$/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()))
+    .join(" ");
+}
+
+function parseRouteFromMessage(message) {
+  const text = message.replace(/\s+/g, " ").trim();
+  const patterns = [
+    /\bfrom\s+(.+?)\s+to\s+(.+)/i,
+    /\b(.+?)\s+(?:theke|to)\s+(.+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    const origin = cleanPlaceName(match[1]);
+    const destination = cleanPlaceName(match[2]);
+
+    if (origin && destination && origin.toLowerCase() !== destination.toLowerCase()) {
+      return {
+        origin,
+        destination
+      };
+    }
+  }
+
+  return null;
+}
+
 function detectModes(normalized) {
   const hasBus = /\bbus\b|bus e|base|buse/.test(normalized);
   const hasCng = /\bcng\b|cng te|cng/.test(normalized);
@@ -99,6 +186,71 @@ function findDemoRoute(normalized) {
   return DEMO_ROUTES.find((route) =>
     route.patterns.every((pattern) => normalized.includes(pattern))
   );
+}
+
+function normalizeLandmarkKey(place) {
+  return String(place || "")
+    .toLowerCase()
+    .replace(/\b(dhaka|bangladesh)\b/g, " ")
+    .replace(/[^a-z0-9\s/-]/g, " ")
+    .replace(/[/-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveLandmark(place) {
+  const key = normalizeLandmarkKey(place);
+  if (!key) return null;
+  if (DEMO_LANDMARKS[key]) return DEMO_LANDMARKS[key];
+
+  const match = Object.keys(DEMO_LANDMARKS)
+    .filter((candidate) => key.includes(candidate) || candidate.includes(key))
+    .sort((a, b) => b.length - a.length)[0];
+
+  return match ? DEMO_LANDMARKS[match] : null;
+}
+
+function toRadians(degrees) {
+  return (degrees * Math.PI) / 180;
+}
+
+function haversineKm([lat1, lon1], [lat2, lon2]) {
+  const earthRadiusKm = 6371;
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(deltaLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+function hashText(value) {
+  return String(value || "")
+    .split("")
+    .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7);
+}
+
+function estimateDemoDistance(origin, destination) {
+  const originCoordinates = resolveLandmark(origin);
+  const destinationCoordinates = resolveLandmark(destination);
+  let distanceKm;
+
+  if (originCoordinates && destinationCoordinates) {
+    distanceKm = haversineKm(originCoordinates, destinationCoordinates) * DEMO_ROAD_FACTOR + 0.8;
+  } else {
+    const seed = Math.abs(hashText(origin) - hashText(destination));
+    distanceKm = 4 + (seed % 130) / 10;
+  }
+
+  const roundedDistance = Math.max(1, Math.round(distanceKm * 10) / 10);
+
+  return {
+    distanceKm: roundedDistance,
+    durationMin: Math.max(8, Math.round((roundedDistance / DEMO_AVERAGE_SPEED_KMPH) * 60))
+  };
 }
 
 function createBusCard(route, index = 0) {
@@ -154,6 +306,10 @@ function createCngCard(distance = DEFAULT_DISTANCE) {
   };
 }
 
+function roundToNearest(value, nearest = 5) {
+  return Math.round(value / nearest) * nearest;
+}
+
 function createRideCards(distance = DEFAULT_DISTANCE, provider) {
   const cards = [];
 
@@ -162,17 +318,13 @@ function createRideCards(distance = DEFAULT_DISTANCE, provider) {
       createRideCard({
         provider: "pathao",
         vehicle: "bike",
-        title: "Pathao Bike",
-        min: 90,
-        max: 130,
+        rate: DEMO_RIDE_RATES.pathao.bike,
         distance
       }),
       createRideCard({
         provider: "pathao",
         vehicle: "car",
-        title: "Pathao Car",
-        min: 210,
-        max: 290,
+        rate: DEMO_RIDE_RATES.pathao.car,
         distance
       })
     );
@@ -183,17 +335,13 @@ function createRideCards(distance = DEFAULT_DISTANCE, provider) {
       createRideCard({
         provider: "uber",
         vehicle: "moto",
-        title: "Uber Moto",
-        min: 110,
-        max: 150,
+        rate: DEMO_RIDE_RATES.uber.moto,
         distance
       }),
       createRideCard({
         provider: "uber",
         vehicle: "go",
-        title: "Uber Go",
-        min: 220,
-        max: 310,
+        rate: DEMO_RIDE_RATES.uber.go,
         distance
       })
     );
@@ -202,14 +350,20 @@ function createRideCards(distance = DEFAULT_DISTANCE, provider) {
   return cards;
 }
 
-function createRideCard({ provider, vehicle, title, min, max, distance }) {
+function createRideCard({ provider, vehicle, rate, distance }) {
+  const estimatedFare = roundToNearest(
+    Math.max(rate.minimumFare, rate.baseFare + distance.distanceKm * rate.perKm)
+  );
+  const min = Math.max(rate.minimumFare, roundToNearest(estimatedFare * 0.85));
+  const max = Math.max(min, roundToNearest(estimatedFare * 1.15));
+
   return {
     type: "ride_hailing",
     provider,
     vehicle,
-    title,
+    title: rate.label,
     currency: "BDT",
-    estimatedFare: Math.round((min + max) / 2),
+    estimatedFare,
     fareRange: {
       min,
       max
@@ -219,7 +373,7 @@ function createRideCard({ provider, vehicle, title, min, max, distance }) {
   };
 }
 
-function createReply({ route, cards, modes }) {
+function createReply({ route, cards, modes, distance }) {
   const lines = [`${route.origin} to ${route.destination}:`];
   const busCard = cards.find((card) => card.type === "bus");
 
@@ -232,7 +386,7 @@ function createReply({ route, cards, modes }) {
       `   Route: ${route.origin} -> ${route.destination}`
     );
   } else if (modes.includes("bus")) {
-    lines.push("", "Bus: No matching database route found.");
+    lines.push("", "Bus: No direct database match found for this route yet.");
   }
 
   for (const card of cards) {
@@ -245,6 +399,10 @@ function createReply({ route, cards, modes }) {
     }
   }
 
+  if (distance && cards.some((card) => card.type === "cng" || card.type === "ride_hailing")) {
+    lines.push("", `Distance estimate: ${distance.distanceKm} km, ${distance.durationMin} min.`);
+  }
+
   if (cards.some((card) => card.type === "ride_hailing")) {
     lines.push("Ride-hailing fares are estimates; actual app fare may vary.");
   }
@@ -255,14 +413,43 @@ function createReply({ route, cards, modes }) {
 function createNoRouteResponse(message) {
   return {
     ok: true,
-    type: "answer",
+    type: "clarification",
     message,
     intent: {
-      origin: "Unknown",
-      destination: "Unknown",
-      modes: ["bus"]
+      origin: null,
+      destination: null,
+      modes: ["bus", "cng", "pathao", "uber"],
+      needsClarification: true,
+      clarificationQuestion: "Tell me your starting point and destination, for example: Gabtoli to Mirpur 1."
     },
-    reply: "No matching database route found in this hosted demo. Try Gabtoli to Mirpur 1, Mirpur 10 to Motijheel, or Gulshan to Dhanmondi CNG.",
+    reply: "Tell me your starting point and destination, for example: Gabtoli to Mirpur 1.",
+    cards: [],
+    results: {
+      buses: [],
+      cng: null,
+      rideHailing: []
+    },
+    meta: {
+      source: "static-demo",
+      inventedRoutes: false
+    }
+  };
+}
+
+function createConversationResponse(message) {
+  return {
+    ok: true,
+    type: "conversation",
+    message,
+    intent: {
+      intentType: "conversation",
+      origin: null,
+      destination: null,
+      modes: [],
+      needsClarification: false
+    },
+    reply:
+      "Hello! Tell me your starting point and destination in Dhaka, and I can check bus routes plus CNG, Pathao, and Uber estimates.",
     cards: [],
     results: {
       buses: [],
@@ -302,34 +489,58 @@ export async function getDemoChatResponse(message) {
   await wait(DEMO_DELAY_MS);
 
   const normalized = normalizeMessage(message);
+  const parsedRoute = parseRouteFromMessage(message);
 
-  if (normalized.includes("mirpur") && normalized.includes("dhanmondi")) {
+  if (isGreetingMessage(normalized)) {
+    return createConversationResponse(message);
+  }
+
+  if (
+    normalized.includes("mirpur") &&
+    normalized.includes("dhanmondi") &&
+    !/\bmirpur\s+\d+\b/.test(normalized)
+  ) {
     return createClarificationResponse(message);
   }
 
-  const route = findDemoRoute(normalized);
+  const demoRoute = findDemoRoute(normalized);
+  const route =
+    demoRoute ||
+    (parsedRoute
+      ? {
+          ...parsedRoute,
+          busName: null,
+          stationCount: null
+        }
+      : null);
 
   if (!route || normalized.includes("mars")) {
     return createNoRouteResponse(message);
   }
 
-  const modes = detectModes(normalized);
+  const hasBusMatch = Boolean(demoRoute);
+  const requestedModes = detectModes(normalized);
+  const modes =
+    requestedModes.includes("bus") && !hasBusMatch
+      ? [...new Set([...requestedModes, "cng", "pathao", "uber"])]
+      : requestedModes;
+  const distance = estimateDemoDistance(route.origin, route.destination);
   const cards = [];
 
-  if (modes.includes("bus")) {
-    cards.push(createBusCard(route));
+  if (modes.includes("bus") && hasBusMatch) {
+    cards.push(createBusCard(demoRoute));
   }
 
   if (modes.includes("cng")) {
-    cards.push(createCngCard());
+    cards.push(createCngCard(distance));
   }
 
   if (modes.includes("pathao")) {
-    cards.push(...createRideCards(DEFAULT_DISTANCE, "pathao"));
+    cards.push(...createRideCards(distance, "pathao"));
   }
 
   if (modes.includes("uber")) {
-    cards.push(...createRideCards(DEFAULT_DISTANCE, "uber"));
+    cards.push(...createRideCards(distance, "uber"));
   }
 
   return {
@@ -339,9 +550,10 @@ export async function getDemoChatResponse(message) {
     intent: {
       origin: route.origin,
       destination: route.destination,
-      modes
+      modes,
+      needsClarification: false
     },
-    reply: createReply({ route, cards, modes }),
+    reply: createReply({ route, cards, modes, distance }),
     cards,
     results: {
       buses: cards.filter((card) => card.type === "bus"),
@@ -350,8 +562,9 @@ export async function getDemoChatResponse(message) {
     },
     meta: {
       distance: modes.some((mode) => ["cng", "pathao", "uber"].includes(mode))
-        ? DEFAULT_DISTANCE
+        ? distance
         : null,
+      fallbackModesAdded: requestedModes.length !== modes.length,
       source: "static-demo",
       inventedRoutes: false
     }
