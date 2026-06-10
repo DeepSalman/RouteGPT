@@ -97,6 +97,40 @@ test("matches sibling variants of multi-word stop names by first word", async ()
   assert.match(result.results.buses[0].route.originStopName, /^Kuril/);
 });
 
+test("bike fare requests show only bike-class rides", async () => {
+  const result = await getDemoChatResponse("Mirpur theke Bashundhara bike e vara koto");
+
+  assert.equal(result.type, "answer");
+  assert.equal(result.results.buses.length, 0, "expected no bus cards for a bike request");
+  assert.equal(result.results.cng, null, "expected no CNG card for a bike request");
+  assert.deepEqual(
+    result.results.rideHailing.map((card) => card.title).sort(),
+    ["Pathao Bike", "Uber Moto"]
+  );
+});
+
+test("provider plus vehicle requests show a single ride product", async () => {
+  const result = await getDemoChatResponse("gulshan to banani pathao bike");
+
+  assert.equal(result.type, "answer");
+  assert.deepEqual(
+    result.results.rideHailing.map((card) => card.title),
+    ["Pathao Bike"]
+  );
+  assert.equal(result.results.cng, null);
+  assert.equal(result.results.buses.length, 0);
+});
+
+test("provider-only requests still show both products of that provider", async () => {
+  const result = await getDemoChatResponse("gulshan to banani uber");
+
+  assert.equal(result.type, "answer");
+  assert.deepEqual(
+    result.results.rideHailing.map((card) => card.title).sort(),
+    ["Uber Go", "Uber Moto"]
+  );
+});
+
 test("still estimates CNG fares", async () => {
   const result = await getDemoChatResponse("Gulshan to Dhanmondi CNG");
 

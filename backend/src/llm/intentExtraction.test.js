@@ -114,6 +114,44 @@ test("classifies Banglish small talk locally without calling an LLM", async () =
   assert.equal(primaryClient.calls.length, 0);
 });
 
+test("bike fare requests parse to ride providers with a bike vehicle filter", async () => {
+  const intent = await extractIntent("Mirpur theke Bashundhara bike e vara koto", {
+    includeMeta: true
+  });
+
+  assert.equal(intent.intentType, "route");
+  assert.equal(intent.origin, "Mirpur");
+  assert.equal(intent.destination, "Bashundhara");
+  assert.deepEqual(intent.modes, ["pathao", "uber"]);
+  assert.deepEqual(intent.rideVehicles, ["bike"]);
+});
+
+test("provider plus vehicle requests stay provider specific", async () => {
+  const intent = await extractIntent("gulshan theke banani pathao bike", {
+    includeMeta: true
+  });
+
+  assert.equal(intent.origin, "Gulshan");
+  assert.equal(intent.destination, "Banani");
+  assert.deepEqual(intent.modes, ["pathao"]);
+  assert.deepEqual(intent.rideVehicles, ["bike"]);
+});
+
+test("normalizes LLM ride vehicle synonyms", () => {
+  const intent = normalizeIntentPayload({
+    intentType: "route",
+    origin: "Gulshan",
+    destination: "Banani",
+    modes: ["uber"],
+    rideVehicles: ["moto", "MOTO", "cab"],
+    studentFare: false,
+    needsClarification: false,
+    clarificationQuestion: null
+  });
+
+  assert.deepEqual(intent.rideVehicles, ["bike", "car"]);
+});
+
 test("shortened place names with theke still parse as routes", async () => {
   const intent = await extractIntent("kuril theke mirpur 1 bus", {
     includeMeta: true

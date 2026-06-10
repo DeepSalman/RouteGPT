@@ -316,6 +316,20 @@ function parseRouteFromMessage(message) {
   return null;
 }
 
+function detectRideVehicles(normalized) {
+  const vehicles = [];
+
+  if (/\bbike\b|\bbaik\b|\bmoto\b|\bmotorbike\b|\bmotorcycle\b|বাইক|মোটো/.test(normalized)) {
+    vehicles.push("bike");
+  }
+
+  if (/\bcar\b|\bcab\b|\buber\s+go\b|কার/.test(normalized)) {
+    vehicles.push("car");
+  }
+
+  return vehicles.length ? vehicles : null;
+}
+
 function detectModes(normalized) {
   const hasBus = /\bbus\b|bus e|base|buse|বাস/.test(normalized);
   const hasCng = /\bcng\b|cng te|cng|সিএনজি/.test(normalized);
@@ -327,6 +341,12 @@ function detectModes(normalized) {
   if (hasCng) modes.push("cng");
   if (hasPathao) modes.push("pathao");
   if (hasUber) modes.push("uber");
+
+  // A bare vehicle word ("bike e vara koto") means ride-hailing from either
+  // provider, but a named provider keeps the request provider-specific.
+  if (!hasPathao && !hasUber && detectRideVehicles(normalized)) {
+    modes.push("pathao", "uber");
+  }
 
   return modes.length ? modes : ["bus", "cng", "pathao", "uber"];
 }
@@ -673,7 +693,16 @@ function roundToNearest(value, nearest = 5) {
   return Math.round(value / nearest) * nearest;
 }
 
-function createRideCards(distance = DEFAULT_DISTANCE, provider) {
+const RIDE_VEHICLE_CLASSES = Object.freeze({
+  bike: Object.freeze(["bike", "moto"]),
+  car: Object.freeze(["car", "go"])
+});
+
+function createRideCards(distance = DEFAULT_DISTANCE, provider, rideVehicles) {
+  const allowedVehicles =
+    Array.isArray(rideVehicles) && rideVehicles.length
+      ? new Set(rideVehicles.flatMap((vehicleClass) => RIDE_VEHICLE_CLASSES[vehicleClass] || []))
+      : null;
   const cards = [];
 
   if (provider === "pathao" || !provider) {
@@ -710,7 +739,7 @@ function createRideCards(distance = DEFAULT_DISTANCE, provider) {
     );
   }
 
-  return cards;
+  return allowedVehicles ? cards.filter((card) => allowedVehicles.has(card.vehicle)) : cards;
 }
 
 function createRideCard({ provider, vehicle, rate, distance }) {
@@ -987,6 +1016,7 @@ export async function getDemoChatResponse(message) {
   const busRoutes = staticBusRoutes.length ? staticBusRoutes : demoRoute ? [demoRoute] : [];
   const hasBusMatch = busRoutes.length > 0;
   const requestedModes = detectModes(normalized);
+  const rideVehicles = detectRideVehicles(normalized);
   const modes =
     requestedModes.includes("bus") && !hasBusMatch
       ? [...new Set([...requestedModes, "cng", "pathao", "uber"])]
@@ -1003,11 +1033,11 @@ export async function getDemoChatResponse(message) {
   }
 
   if (modes.includes("pathao")) {
-    cards.push(...createRideCards(distance, "pathao"));
+    cards.push(...createRideCards(distance, "pathao", rideVehicles));
   }
 
   if (modes.includes("uber")) {
-    cards.push(...createRideCards(distance, "uber"));
+    cards.push(...createRideCards(distance, "uber", rideVehicles));
   }
 
   return {
@@ -1018,6 +1048,7 @@ export async function getDemoChatResponse(message) {
       origin: route.origin,
       destination: route.destination,
       modes,
+      rideVehicles,
       needsClarification: false
     },
     reply: createReply({ route, cards, modes, distance }),

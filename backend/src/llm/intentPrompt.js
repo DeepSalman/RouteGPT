@@ -46,6 +46,18 @@ const INTENT_SCHEMA = Object.freeze({
     },
     conversationReply: {
       anyOf: [{ type: "string" }, { type: "null" }]
+    },
+    rideVehicles: {
+      anyOf: [
+        {
+          type: "array",
+          items: {
+            type: "string",
+            enum: ["bike", "car"]
+          }
+        },
+        { type: "null" }
+      ]
     }
   }
 });
@@ -94,6 +106,11 @@ Mode hints:
 - "uber", "উবার" -> "uber"
 - "bike" without a provider usually means ride-hailing, so include ["pathao","uber"] unless another mode is mentioned.
 
+Vehicle filter:
+- When the user asks for a specific ride vehicle, set "rideVehicles": ["bike"] for bike/baik/moto requests or ["car"] for car/cab requests; otherwise set "rideVehicles": null.
+- When rideVehicles is set, modes must contain only the matching ride-hailing providers: the named provider if the user names one ("pathao bike" -> ["pathao"]), otherwise ["pathao","uber"].
+- A vehicle-specific fare question must not include bus or cng in modes.
+
 Return this exact JSON shape:
 {
   "intentType": "route",
@@ -101,6 +118,7 @@ Return this exact JSON shape:
   "origin": "Gabtoli",
   "destination": "Mirpur 1",
   "modes": ["bus"],
+  "rideVehicles": null,
   "studentFare": false,
   "needsClarification": false,
   "clarificationQuestion": null,
@@ -137,6 +155,12 @@ JSON: {"intentType":"conversation","busName":null,"origin":null,"destination":nu
 
 User: "kuril theke uttara jabo"
 JSON: {"intentType":"route","busName":null,"origin":"Kuril","destination":"Uttara","modes":["bus","cng","pathao","uber"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+
+User: "Mirpur theke bashundhara bike e vara koto"
+JSON: {"intentType":"route","busName":null,"origin":"Mirpur","destination":"Bashundhara","modes":["pathao","uber"],"rideVehicles":["bike"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+
+User: "gulshan theke banani pathao car e jabo"
+JSON: {"intentType":"route","busName":null,"origin":"Gulshan","destination":"Banani","modes":["pathao"],"rideVehicles":["car"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 
 User: "what is the capital of France?"
 JSON: {"intentType":"conversation","busName":null,"origin":null,"destination":null,"modes":[],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":"That's Paris! And whenever you need to get around Dhaka, just tell me your start and destination."}
@@ -182,6 +206,7 @@ Return only one valid JSON object with this shape:
   "origin": string or null,
   "destination": string or null,
   "modes": array of "bus" | "cng" | "pathao" | "uber",
+  "rideVehicles": array of "bike" | "car", or null,
   "studentFare": boolean,
   "needsClarification": boolean,
   "clarificationQuestion": string or null,

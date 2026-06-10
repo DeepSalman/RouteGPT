@@ -325,6 +325,52 @@ test("all-mode query returns bus, cng, Pathao, and Uber cards", async () => {
   );
 });
 
+test("bike fare requests only return bike-class ride estimates", async () => {
+  const routeRepository = createRouteRepository();
+
+  const result = await handleChatMessage("Mirpur theke Bashundhara bike e vara koto", {
+    intentExtractor: createIntentExtractor({
+      ...baseIntent,
+      origin: "Mirpur",
+      destination: "Bashundhara",
+      modes: ["pathao", "uber"],
+      rideVehicles: ["bike"]
+    }),
+    routeRepository,
+    distanceService: createDistanceService({ distanceKm: 9, durationMin: 40 })
+  });
+
+  assert.equal(result.type, "answer");
+  assert.equal(routeRepository.calls.length, 0);
+  assert.equal(result.results.buses.length, 0);
+  assert.equal(result.results.cng, null);
+  assert.deepEqual(
+    result.results.rideHailing.map((card) => card.title).sort(),
+    ["Pathao Bike", "Uber Moto"]
+  );
+});
+
+test("provider plus vehicle requests return a single ride product", async () => {
+  const result = await handleChatMessage("gulshan theke banani pathao car e jabo", {
+    intentExtractor: createIntentExtractor({
+      ...baseIntent,
+      origin: "Gulshan",
+      destination: "Banani",
+      modes: ["pathao"],
+      rideVehicles: ["car"]
+    }),
+    routeRepository: createRouteRepository(),
+    distanceService: createDistanceService()
+  });
+
+  assert.deepEqual(
+    result.results.rideHailing.map((card) => card.title),
+    ["Pathao Car"]
+  );
+  assert.equal(result.results.cng, null);
+  assert.equal(result.results.buses.length, 0);
+});
+
 test("clarification response skips database and distance calls", async () => {
   const routeRepository = createRouteRepository();
   const distanceService = createDistanceService();

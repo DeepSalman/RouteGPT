@@ -225,14 +225,39 @@ function parseLocalBusRouteIntent(message) {
   return null;
 }
 
+function detectRideVehiclesFromText(message) {
+  const normalized = String(message || "").toLowerCase();
+  const vehicles = [];
+
+  if (/\bbike\b|\bbaik\b|\bmoto\b|\bmotorbike\b|\bmotorcycle\b|বাইক|মোটো/.test(normalized)) {
+    vehicles.push("bike");
+  }
+
+  if (/\bcar\b|\bcab\b|\buber\s+go\b|কার/.test(normalized)) {
+    vehicles.push("car");
+  }
+
+  return vehicles.length ? vehicles : null;
+}
+
 function detectModesFromText(message) {
   const normalized = String(message || "").toLowerCase();
   const modes = [];
 
   if (/\b(bus|base|buse|local)\b|বাস/.test(normalized)) modes.push("bus");
   if (/\bcng\b|সিএনজি/.test(normalized)) modes.push("cng");
-  if (/\bpathao\b|\bbike\b|পাঠাও|বাইক/.test(normalized)) modes.push("pathao");
-  if (/\buber\b|\bbike\b|\bmoto\b|উবার|বাইক|মোটো/.test(normalized)) modes.push("uber");
+
+  const hasPathao = /\bpathao\b|পাঠাও/.test(normalized);
+  const hasUber = /\buber\b|উবার/.test(normalized);
+
+  if (hasPathao) modes.push("pathao");
+  if (hasUber) modes.push("uber");
+
+  // A bare vehicle word ("bike e jabo") means ride-hailing from either provider,
+  // but a named provider keeps the request provider-specific.
+  if (!hasPathao && !hasUber && detectRideVehiclesFromText(normalized)) {
+    modes.push("pathao", "uber");
+  }
 
   return modes.length ? modes : [...ALL_MODES];
 }
@@ -266,6 +291,7 @@ function parseLocalRouteIntent(message) {
       origin,
       destination,
       modes: detectModesFromText(text),
+      rideVehicles: detectRideVehiclesFromText(text),
       studentFare: hasStudentFareIntent(text),
       needsClarification: false,
       clarificationQuestion: null
@@ -373,6 +399,24 @@ function normalizeModes(modes) {
   return deduped.length ? deduped : [...ALL_MODES];
 }
 
+function normalizeRideVehicle(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (["bike", "baik", "moto", "motorbike", "motorcycle"].includes(normalized)) return "bike";
+  if (["car", "cab", "go"].includes(normalized)) return "car";
+
+  return null;
+}
+
+function normalizeRideVehicles(vehicles) {
+  if (!Array.isArray(vehicles)) {
+    return null;
+  }
+
+  const normalized = [...new Set(vehicles.map(normalizeRideVehicle).filter(Boolean))];
+  return normalized.length ? normalized : null;
+}
+
 function normalizeIntentPayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Intent payload must be a JSON object.");
@@ -391,6 +435,7 @@ function normalizeIntentPayload(payload) {
       : intentType === "bus_route"
         ? ["bus"]
         : normalizeModes(payload.modes);
+  const rideVehicles = intentType === "route" ? normalizeRideVehicles(payload.rideVehicles) : null;
   const studentFare = Boolean(payload.studentFare);
   const needsClarification = Boolean(
     (intentType === "route" && (payload.needsClarification || !origin || !destination)) ||
@@ -404,6 +449,7 @@ function normalizeIntentPayload(payload) {
     destination,
     busName,
     modes,
+    rideVehicles,
     studentFare,
     needsClarification,
     clarificationQuestion:

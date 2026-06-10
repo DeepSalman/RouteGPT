@@ -9,6 +9,10 @@ import { formatChatReply } from "./responseFormatter.js";
 
 const DISTANCE_MODES = Object.freeze(["cng", "pathao", "uber"]);
 const PRIVATE_TRANSPORT_MODES = Object.freeze(["cng", "pathao", "uber"]);
+const RIDE_VEHICLE_CLASSES = Object.freeze({
+  bike: Object.freeze(["bike", "moto"]),
+  car: Object.freeze(["car", "go"])
+});
 
 function validateChatMessage(message) {
   if (typeof message !== "string") {
@@ -115,13 +119,19 @@ function buildCngCard(distance, isNightFare = false) {
   };
 }
 
-function buildRideCards(distance, modes) {
+function buildRideCards(distance, modes, rideVehicles) {
   if (!modes.includes("pathao") && !modes.includes("uber")) {
     return [];
   }
 
+  const allowedVehicles =
+    Array.isArray(rideVehicles) && rideVehicles.length
+      ? new Set(rideVehicles.flatMap((vehicleClass) => RIDE_VEHICLE_CLASSES[vehicleClass] || []))
+      : null;
+
   return estimateAllRideFares({ distanceKm: distance.distanceKm })
     .filter((estimate) => modes.includes(estimate.provider))
+    .filter((estimate) => !allowedVehicles || allowedVehicles.has(estimate.vehicle))
     .map((estimate) => ({
       type: "ride_hailing",
       provider: estimate.provider,
@@ -319,7 +329,7 @@ async function handleChatMessage(
   });
   const cngCard =
     distance && effectiveModes.includes("cng") ? buildCngCard(distance, isNightFare) : null;
-  const rideCards = distance ? buildRideCards(distance, effectiveModes) : [];
+  const rideCards = distance ? buildRideCards(distance, effectiveModes, intent.rideVehicles) : [];
   const cards = [...busCards, ...(cngCard ? [cngCard] : []), ...rideCards];
 
   return {

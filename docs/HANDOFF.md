@@ -65,6 +65,7 @@ Current MVP supports:
 - Bus fare and student fare.
 - CNG estimate by distance.
 - Pathao Bike, Pathao Car, Uber Moto, and Uber Go estimates.
+- Vehicle-specific fare requests: "bike e vara koto" returns only bike-class rides (Pathao Bike, Uber Moto), "pathao bike" only that product, "car" only car-class rides; bus and CNG cards are excluded from vehicle-specific requests.
 - "Report wrong info" button in transport cards.
 - Simple account information modal.
 - GitHub Pages static demo mode.
