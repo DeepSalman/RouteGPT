@@ -53,6 +53,7 @@ const DHAKA_LANDMARKS = Object.freeze({
   sadarghat: [23.709, 90.407],
   shahbag: [23.738, 90.395],
   shantinagar: [23.738, 90.414],
+  "shonir akhra": [23.704, 90.457],
   shewrapara: [23.79, 90.374],
   shewra: [23.79, 90.424],
   shyamoli: [23.774, 90.365],
@@ -118,17 +119,94 @@ function normalizeLandmarkKey(place) {
   return String(place || "")
     .toLowerCase()
     .replace(/\b(dhaka|bangladesh)\b/g, " ")
-    .replace(/[^a-z0-9\s/-]/g, " ")
+    .replace(/[^\p{L}\p{N}\s/-]/gu, " ")
     .replace(/[/-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function compactLandmarkKey(place) {
+  return normalizeLandmarkKey(place).replace(/\s+/g, "");
+}
+
+function looseLatinLandmarkKey(place) {
+  return compactLandmarkKey(place)
+    .replace(/kh/g, "k")
+    .replace(/gh/g, "g")
+    .replace(/ph/g, "f")
+    .replace(/bh/g, "b")
+    .replace(/sh/g, "s")
+    .replace(/ch/g, "c");
+}
+
+function editDistance(a, b) {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_value, index) => index);
+  const current = Array.from({ length: b.length + 1 }, () => 0);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + cost
+      );
+    }
+
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[b.length];
+}
+
+function scoreLandmarkMatch(inputKey, candidateKey) {
+  const inputCompact = compactLandmarkKey(inputKey);
+  const candidateCompact = compactLandmarkKey(candidateKey);
+  const inputLoose = looseLatinLandmarkKey(inputKey);
+  const candidateLoose = looseLatinLandmarkKey(candidateKey);
+
+  if (!inputCompact || !candidateCompact) return 0;
+  if (inputKey === candidateKey) return 1;
+  if (inputCompact === candidateCompact) return 0.98;
+  if (inputLoose === candidateLoose) return 0.96;
+  if (inputKey.includes(candidateKey) || candidateKey.includes(inputKey)) return 0.9;
+  if (inputCompact.includes(candidateCompact) || candidateCompact.includes(inputCompact)) {
+    return 0.88;
+  }
+
+  const shortest = Math.min(inputCompact.length, candidateCompact.length);
+  if (shortest < 5) return 0;
+
+  const allowedDistance = shortest >= 9 ? 2 : 1;
+  const distance = Math.min(
+    editDistance(inputCompact, candidateCompact),
+    editDistance(inputLoose, candidateLoose)
+  );
+
+  if (distance <= allowedDistance) {
+    return 0.82 - distance * 0.05;
+  }
+
+  return 0;
 }
 
 function resolveLandmark(place) {
   const normalized = normalizeLandmarkKey(place);
   if (!normalized) return null;
 
-  const alias = DHAKA_LANDMARK_ALIASES[normalized] || normalized;
+  const compact = compactLandmarkKey(normalized);
+  const looseLatin = looseLatinLandmarkKey(normalized);
+  const alias =
+    DHAKA_LANDMARK_ALIASES[normalized] ||
+    DHAKA_LANDMARK_ALIASES[compact] ||
+    DHAKA_LANDMARK_ALIASES[looseLatin] ||
+    normalized;
   if (DHAKA_LANDMARKS[alias]) {
     return {
       name: alias,
@@ -137,12 +215,16 @@ function resolveLandmark(place) {
   }
 
   const matches = Object.keys(DHAKA_LANDMARKS)
-    .filter((key) => normalized.includes(key) || key.includes(normalized))
-    .sort((a, b) => b.length - a.length);
+    .map((key) => ({
+      key,
+      score: scoreLandmarkMatch(normalized, key)
+    }))
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score || b.key.length - a.key.length);
 
   if (!matches.length) return null;
 
-  const key = matches[0];
+  const key = matches[0].key;
   return {
     name: key,
     coordinates: DHAKA_LANDMARKS[key]

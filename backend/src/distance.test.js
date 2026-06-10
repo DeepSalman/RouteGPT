@@ -29,3 +29,13 @@ test("falls back to a rough estimate for unknown Dhaka text", () => {
   assert.equal(distance.confidence, "low");
   assert.ok(distance.distanceKm >= 4);
 });
+
+test("recognizes no-space Shonir Akhra spelling for estimates", () => {
+  const distance = estimateDhakaDistance({
+    origin: "shonirakra",
+    destination: "gabtoli"
+  });
+
+  assert.equal(distance.source, "approximate_landmark");
+  assert.equal(distance.confidence, "medium");
+});

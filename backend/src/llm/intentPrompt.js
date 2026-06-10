@@ -55,6 +55,9 @@ Your job:
 - Understand Banglish, Bengali, and English transport queries.
 - Classify greetings, thanks, and general app-help messages as conversation, not route.
 - Extract origin and destination as concise English canonical-looking Dhaka place names.
+- Preserve Bengali place names when the user writes Bengali.
+- Treat missing spaces, punctuation differences, and small Banglish spelling mistakes as normal user input.
+- Examples: "shonirakra" can mean "Shonir Akhra"; "শনিরআখরা" can mean "শনির আখরা".
 - Detect transport modes only when the user mentions them.
 - If no mode is mentioned, use all modes: ["bus","cng","pathao","uber"].
 - Detect student fare intent when the user asks as a student or asks for student fare.
@@ -107,6 +110,12 @@ JSON: {"intentType":"route","origin":null,"destination":"Farmgate","modes":["bus
 
 User: "hello"
 JSON: {"intentType":"conversation","origin":null,"destination":null,"modes":[],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":"Hello! Tell me your starting point and destination in Dhaka."}
+
+User: "shonirakra to gabtoli bus"
+JSON: {"intentType":"route","origin":"Shonir Akhra","destination":"Gabtoli","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
+
+User: "শনিরআখরা থেকে গাবতলি বাস"
+JSON: {"intentType":"route","origin":"শনিরআখরা","destination":"গাবতলি","modes":["bus"],"studentFare":false,"needsClarification":false,"clarificationQuestion":null,"conversationReply":null}
 `.trim();
 
 function buildIntentExtractionPrompt(userMessage) {

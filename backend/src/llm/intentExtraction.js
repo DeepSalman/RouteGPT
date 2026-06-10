@@ -15,9 +15,10 @@ const CONVERSATION_REPLIES = Object.freeze({
     "I can help with Dhaka route questions. Try something like \"Gabtoli to Mirpur 1\", \"Bashundhara theke Jatrabari bus\", or \"Gulshan to Dhanmondi CNG\"."
 });
 const LEADING_ROUTE_WORDS =
-  /^(?:how\s+(?:do|can)\s+i\s+(?:go|get)|how\s+to\s+(?:go|get)|route|bus\s+route|student\s+fare\s+koto|fare\s+koto|student\s+fare|student|ami|i|from)\s+/i;
+  /^(?:how\s+(?:do|can)\s+i\s+(?:go|get)|how\s+to\s+(?:go|get)|route|bus\s+route|student\s+fare\s+koto|fare\s+koto|student\s+fare|student|ami|i|from|আমি|আমার|আমাকে|কিভাবে|কীভাবে)\s+/i;
 const TRAILING_ROUTE_WORDS =
-  /\b(?:bus|base|buse|local|cng|pathao|uber|bike|car|moto|go|diye|using|public\s+transport|jabo|jabo\??|jete\s+chai|lagbe|fare|koto|please|pls|e|te)\b.*$/i;
+  /(?:\b(?:bus|base|buse|local|cng|pathao|uber|bike|car|moto|go|diye|using|public\s+transport|jabo|jabo\??|jete\s+chai|lagbe|fare|koto|please|pls|e|te)\b|(?:বাস|সিএনজি|পাঠাও|উবার|বাইক|কার|মোটো|যাবো|যাব|যেতে\s+চাই|লাগবে|ভাড়া|ভাড়া|কত|দিয়ে|দিয়ে)).*$/i;
+const BANGLA_RANGE = /[\u0980-\u09FF]/u;
 
 class IntentExtractionError extends Error {
   constructor(message, { providerErrors = [] } = {}) {
@@ -80,12 +81,16 @@ function normalizePlaceName(value) {
   const cleaned = cleanNullableText(value)
     ?.replace(LEADING_ROUTE_WORDS, "")
     .replace(TRAILING_ROUTE_WORDS, "")
-    .replace(/^(?:from|theke|to)\s+/i, "")
-    .replace(/\s+(?:from|theke|to)$/i, "")
+    .replace(/^(?:from|theke|to|থেকে|হতে|টু)\s+/i, "")
+    .replace(/\s+(?:from|theke|to|থেকে|হতে|টু)$/i, "")
     .replace(/\s+/g, " ")
     .trim();
 
   if (!cleaned) return null;
+
+  if (BANGLA_RANGE.test(cleaned)) {
+    return cleaned;
+  }
 
   return cleaned
     .split(" ")
@@ -101,10 +106,10 @@ function detectModesFromText(message) {
   const normalized = String(message || "").toLowerCase();
   const modes = [];
 
-  if (/\b(bus|base|buse|local)\b/.test(normalized)) modes.push("bus");
-  if (/\bcng\b/.test(normalized)) modes.push("cng");
-  if (/\bpathao\b|\bbike\b/.test(normalized)) modes.push("pathao");
-  if (/\buber\b|\bbike\b|\bmoto\b/.test(normalized)) modes.push("uber");
+  if (/\b(bus|base|buse|local)\b|বাস/.test(normalized)) modes.push("bus");
+  if (/\bcng\b|সিএনজি/.test(normalized)) modes.push("cng");
+  if (/\bpathao\b|\bbike\b|পাঠাও|বাইক/.test(normalized)) modes.push("pathao");
+  if (/\buber\b|\bbike\b|\bmoto\b|উবার|বাইক|মোটো/.test(normalized)) modes.push("uber");
 
   return modes.length ? modes : [...ALL_MODES];
 }
@@ -119,7 +124,7 @@ function parseLocalRouteIntent(message) {
 
   const routePatterns = [
     /\bfrom\s+(.+?)\s+to\s+(.+)/i,
-    /\b(.+?)\s+(?:theke|to)\s+(.+)/i
+    /(.+?)\s+(?:theke|to|থেকে|হতে|টু)\s+(.+)/i
   ];
 
   for (const pattern of routePatterns) {

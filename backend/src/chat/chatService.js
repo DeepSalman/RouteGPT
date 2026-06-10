@@ -209,8 +209,15 @@ async function handleChatMessage(
       ? addPrivateTransportFallbackModes(intent.modes)
       : intent.modes;
   const busCards = routes.map(buildBusCard);
+  const distanceIntent = busCards.length
+    ? {
+        ...intent,
+        origin: busCards[0].route.originStopName,
+        destination: busCards[0].route.destinationStopName
+      }
+    : intent;
   const { distance, distanceError } = await maybeGetDistance({
-    intent,
+    intent: distanceIntent,
     modes: effectiveModes,
     distanceService
   });

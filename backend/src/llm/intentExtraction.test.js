@@ -85,6 +85,26 @@ test("uses local route parsing when providers are unavailable", async () => {
   assert.equal(intent.meta.provider, "local");
 });
 
+test("parses no-space Shonir Akhra spelling locally", async () => {
+  const intent = await extractIntent("shonirakra to gabtoli bus", {
+    includeMeta: true
+  });
+
+  assert.equal(intent.origin, "Shonirakra");
+  assert.equal(intent.destination, "Gabtoli");
+  assert.deepEqual(intent.modes, ["bus"]);
+});
+
+test("parses Bengali route separators locally", async () => {
+  const intent = await extractIntent("শনিরআখরা থেকে গাবতলি বাস", {
+    includeMeta: true
+  });
+
+  assert.equal(intent.origin, "শনিরআখরা");
+  assert.equal(intent.destination, "গাবতলি");
+  assert.deepEqual(intent.modes, ["bus"]);
+});
+
 test("extracts Banglish bus intent with Gemini primary", async () => {
   const primaryClient = createMockClient({
     responses: [

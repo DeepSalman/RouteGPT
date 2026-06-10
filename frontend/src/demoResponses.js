@@ -26,6 +26,7 @@ const DEMO_LANDMARKS = Object.freeze({
   motijheel: [23.7337, 90.4173],
   rampura: [23.763, 90.421],
   shahbag: [23.738, 90.395],
+  "shonir akhra": [23.704, 90.457],
   uttara: [23.8759, 90.3795]
 });
 const DEMO_RIDE_RATES = Object.freeze({
@@ -131,8 +132,10 @@ function isGreetingMessage(normalized) {
 
 function cleanPlaceName(value) {
   const cleaned = String(value || "")
-    .replace(/^(?:how\s+(?:do|can)\s+i\s+(?:go|get)|how\s+to\s+(?:go|get)|route|student\s+fare\s+koto|fare\s+koto|from)\s+/i, "")
-    .replace(/\b(?:bus|base|buse|local|cng|pathao|uber|bike|car|moto|go|diye|using|public\s+transport|jabo|jete\s+chai|lagbe|fare|koto|please|pls|e|te)\b.*$/i, "")
+    .replace(/^(?:how\s+(?:do|can)\s+i\s+(?:go|get)|how\s+to\s+(?:go|get)|route|student\s+fare\s+koto|fare\s+koto|from|ami|i|আমি|আমার|আমাকে|কিভাবে|কীভাবে)\s+/i, "")
+    .replace(/(?:\b(?:bus|base|buse|local|cng|pathao|uber|bike|car|moto|go|diye|using|public\s+transport|jabo|jete\s+chai|lagbe|fare|koto|please|pls|e|te)\b|(?:বাস|সিএনজি|পাঠাও|উবার|বাইক|কার|মোটো|যাবো|যাব|যেতে\s+চাই|লাগবে|ভাড়া|ভাড়া|কত|দিয়ে|দিয়ে)).*$/i, "")
+    .replace(/^(?:from|theke|to|থেকে|হতে|টু)\s+/i, "")
+    .replace(/\s+(?:from|theke|to|থেকে|হতে|টু)$/i, "")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -148,7 +151,7 @@ function parseRouteFromMessage(message) {
   const text = message.replace(/\s+/g, " ").trim();
   const patterns = [
     /\bfrom\s+(.+?)\s+to\s+(.+)/i,
-    /\b(.+?)\s+(?:theke|to)\s+(.+)/i
+    /(.+?)\s+(?:theke|to|থেকে|হতে|টু)\s+(.+)/i
   ];
 
   for (const pattern of patterns) {
@@ -170,10 +173,10 @@ function parseRouteFromMessage(message) {
 }
 
 function detectModes(normalized) {
-  const hasBus = /\bbus\b|bus e|base|buse/.test(normalized);
-  const hasCng = /\bcng\b|cng te|cng/.test(normalized);
-  const hasPathao = normalized.includes("pathao");
-  const hasUber = normalized.includes("uber");
+  const hasBus = /\bbus\b|bus e|base|buse|বাস/.test(normalized);
+  const hasCng = /\bcng\b|cng te|cng|সিএনজি/.test(normalized);
+  const hasPathao = normalized.includes("pathao") || normalized.includes("পাঠাও");
+  const hasUber = normalized.includes("uber") || normalized.includes("উবার");
   const modes = [];
 
   if (hasBus) modes.push("bus");
@@ -187,11 +190,69 @@ function detectModes(normalized) {
 function normalizeLookupText(value) {
   return String(value || "")
     .toLowerCase()
-    .replace(/\b(dhaka|bangladesh)\b/g, " ")
-    .replace(/[^a-z0-9\s/-]/g, " ")
+    .replace(/\b(dhaka|bangladesh)\b|ঢাকা|বাংলাদেশ/g, " ")
+    .replace(/[^\p{L}\p{N}\s/-]/gu, " ")
     .replace(/[/-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function compactLookupText(value) {
+  return normalizeLookupText(value).replace(/\s+/g, "");
+}
+
+function looseLatinLookupText(value) {
+  return compactLookupText(value)
+    .replace(/kh/g, "k")
+    .replace(/gh/g, "g")
+    .replace(/ph/g, "f")
+    .replace(/bh/g, "b")
+    .replace(/sh/g, "s")
+    .replace(/ch/g, "c");
+}
+
+function getLookupVariants(value) {
+  const normalized = normalizeLookupText(value);
+  const compact = compactLookupText(value);
+  const looseLatin = looseLatinLookupText(value);
+  return [...new Set([normalized, compact, looseLatin].filter(Boolean))];
+}
+
+function editDistance(a, b) {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_value, index) => index);
+  const current = Array.from({ length: b.length + 1 }, () => 0);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + cost
+      );
+    }
+
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[b.length];
+}
+
+function isCloseLookupMatch(term, value) {
+  if (!term || !value) return false;
+  if (term === value || term.includes(value) || value.includes(term)) return true;
+
+  const shortest = Math.min(term.length, value.length);
+  if (shortest < 5) return false;
+
+  const allowedDistance = shortest >= 9 ? 2 : 1;
+  return editDistance(term, value) <= allowedDistance;
 }
 
 function buildLookupTerms(place) {
@@ -206,15 +267,15 @@ function buildLookupTerms(place) {
     "mirpur eleven": "mirpur 11",
     "mirpur twelve": "mirpur 12"
   };
-  const terms = [normalized, aliases[normalized]].filter(Boolean);
+  const terms = [normalized, aliases[normalized]].flatMap(getLookupVariants);
   return [...new Set(terms)];
 }
 
 function stopMatches(stop, terms) {
-  const values = [stop.name, stop.nameBn, stop.raw].map(normalizeLookupText).filter(Boolean);
+  const values = [stop.name, stop.nameBn, stop.raw].flatMap(getLookupVariants);
 
   return terms.some((term) =>
-    values.some((value) => value === term || value.includes(term) || term.includes(value))
+    values.some((value) => isCloseLookupMatch(term, value))
   );
 }
 
@@ -273,7 +334,7 @@ function normalizeLandmarkKey(place) {
   return String(place || "")
     .toLowerCase()
     .replace(/\b(dhaka|bangladesh)\b/g, " ")
-    .replace(/[^a-z0-9\s/-]/g, " ")
+    .replace(/[^\p{L}\p{N}\s/-]/gu, " ")
     .replace(/[/-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -284,8 +345,13 @@ function resolveLandmark(place) {
   if (!key) return null;
   if (DEMO_LANDMARKS[key]) return DEMO_LANDMARKS[key];
 
+  const terms = getLookupVariants(key);
   const match = Object.keys(DEMO_LANDMARKS)
-    .filter((candidate) => key.includes(candidate) || candidate.includes(key))
+    .filter((candidate) =>
+      terms.some((term) =>
+        getLookupVariants(candidate).some((value) => isCloseLookupMatch(term, value))
+      )
+    )
     .sort((a, b) => b.length - a.length)[0];
 
   return match ? DEMO_LANDMARKS[match] : null;
@@ -593,8 +659,8 @@ export async function getDemoChatResponse(message) {
   const route =
     (staticBusRoutes.length
       ? {
-          origin: parsedRoute.origin,
-          destination: parsedRoute.destination
+          origin: staticBusRoutes[0].originStopName,
+          destination: staticBusRoutes[0].destinationStopName
         }
       : null) ||
     demoRoute ||
