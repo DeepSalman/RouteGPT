@@ -508,7 +508,7 @@ function ChatMessage({ message }) {
     >
       {message.role === "assistant" && <AssistantAvatar />}
       <div className="message-stack">
-        {message.content && (
+        {message.content && (message.role === "user" || !hasCards || message.tone === "error") && (
           <div className="message-bubble">
             <p>{message.content}</p>
           </div>
